@@ -161,14 +161,12 @@ const InternDashboard = () => {
 // This component decides which dashboard to show based on the user's role.
 export default function DashboardPage() {
   const token = useAuthStore((state) => state.token);
-  console.log("Auth Token:", token);
 
   if (!token) {
     return <div className="text-center p-8">Loading user data...</div>;
   }
 
   const { role } = jwtDecode<DecodedToken>(token);
-  console.log("Decoded Role:", role);
 
   if (role === "ADMIN") {
     return <AdminDashboard />;
