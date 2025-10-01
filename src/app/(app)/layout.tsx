@@ -1,26 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react"; // Import useState
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { Sidebar } from "@/components/Sidebar";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((state) => state.token);
+  const hasHydrated = useAuthStore((state) => state._hasHydrated); // Get hydration status
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true); // 1. Add loading state
 
-  useEffect(() => {
-    // This effect now checks the token and updates loading status
-    if (token) {
-      setIsLoading(false); // Token exists, we can show the page
-    } else {
-      router.push("/login"); // No token, redirect
-    }
-  }, [token, router]);
+  // This logic now runs only after the store has confirmed it has loaded from storage
+  if (hasHydrated && !token) {
+    router.push("/login");
+    return null; // Return null while redirecting
+  }
 
-  // 2. Show a loading message while we verify the token
-  if (isLoading) {
+  // Show a loading state until the store is hydrated
+  if (!hasHydrated) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div>Loading...</div>
@@ -28,11 +24,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // 3. Only render the layout if loading is complete and token exists
+  // If hydrated and token exists, render the layout
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 p-4 md:p-8 bg-muted/40">{children}</main>
+      <main className="flex-1 bg-muted/40">{children}</main>
     </div>
   );
 }

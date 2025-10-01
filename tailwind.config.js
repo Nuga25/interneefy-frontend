@@ -19,6 +19,7 @@ const config = {
       },
     },
     extend: {
+      // THIS 'colors' OBJECT WAS THE MISSING PIECE
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
