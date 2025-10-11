@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "./ui/button";
-import { LayoutDashboard, CheckSquare, LogOut } from "lucide-react";
+import { User, CheckSquare, LogOut } from "lucide-react";
 
 type InternSidebarProps = {
   onLinkClick?: () => void; // Optional callback for mobile menu closure
@@ -23,13 +23,13 @@ export function InternSidebar({ onLinkClick }: InternSidebarProps) {
   const navLinks = [
     {
       href: "/dashboard",
-      label: "Dashboard",
-      icon: LayoutDashboard,
+      label: "My tasks",
+      icon: CheckSquare,
     },
     {
-      href: "/dashboard/tasks",
-      label: "My Tasks",
-      icon: CheckSquare,
+      href: "/dashboard/myProfile",
+      label: "My Profile & Feedback",
+      icon: User,
     },
   ];
 
