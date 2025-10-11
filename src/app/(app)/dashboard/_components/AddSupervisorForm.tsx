@@ -21,25 +21,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface AddUserFormProps {
+interface AddSupervisorFormProps {
   onUserAdded: () => void;
 }
 
-export function AddSupervisorForm({ onUserAdded }: AddUserFormProps) {
+export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
   const [open, setOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [domain, setDomain] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const token = useAuthStore((state) => state.token);
+
+  const resetForm = () => {
+    setFullName("");
+    setEmail("");
+    setPhone("");
+    setDomain("");
+    setError("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
 
-    const password = "password123";
+    setIsSubmitting(true);
+    setError("");
 
     try {
       const response = await fetch(
@@ -53,7 +66,6 @@ export function AddSupervisorForm({ onUserAdded }: AddUserFormProps) {
           body: JSON.stringify({
             fullName,
             email,
-            password,
             role: "SUPERVISOR",
           }),
         }
@@ -62,18 +74,30 @@ export function AddSupervisorForm({ onUserAdded }: AddUserFormProps) {
       if (response.ok) {
         onUserAdded();
         setOpen(false);
-        setFullName("");
-        setEmail("");
+        resetForm();
       } else {
-        alert("Failed to add supervisor.");
+        const errorData = await response.json();
+        setError(
+          errorData.error || "Failed to add supervisor. Please try again."
+        );
       }
     } catch (error) {
-      alert("An error occurred.");
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) {
+          resetForm();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline">
           <PlusCircle className="mr-2 h-4 w-4" /> Add Supervisor
@@ -86,19 +110,28 @@ export function AddSupervisorForm({ onUserAdded }: AddUserFormProps) {
             Add a new supervisor to manage and mentor interns.
           </DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
+            <Label htmlFor="fullName">Full Name *</Label>
             <Input
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Enter supervisor's full name"
               required
+              disabled={isSubmitting}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
+            <Label htmlFor="email">Email Address *</Label>
             <Input
               id="email"
               type="email"
@@ -106,15 +139,27 @@ export function AddSupervisorForm({ onUserAdded }: AddUserFormProps) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="supervisor@company.com"
               required
+              disabled={isSubmitting}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number (Optional)</Label>
-            <Input id="phone" type="tel" placeholder="+1 (555) 123-4567" />
+            <Input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+1 (555) 123-4567"
+              disabled={isSubmitting}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="domain">Assigned Domain</Label>
-            <Select>
+            <Select
+              onValueChange={setDomain}
+              value={domain}
+              disabled={isSubmitting}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a domain" />
               </SelectTrigger>
@@ -123,19 +168,22 @@ export function AddSupervisorForm({ onUserAdded }: AddUserFormProps) {
                   Software Engineering
                 </SelectItem>
                 <SelectItem value="design">Product Design</SelectItem>
+                <SelectItem value="marketing">Marketing</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {/* Note: Department, Years of Experience, and Bio are not saved yet */}
           <DialogFooter>
             <Button
               type="button"
               variant="ghost"
               onClick={() => setOpen(false)}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="submit">Add Supervisor</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Supervisor"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -2,8 +2,9 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { ColumnFiltersState } from "@tanstack/react-table";
 import {
   Card,
   CardContent,
@@ -22,32 +23,143 @@ import {
 import { BarChartComponent, PieChartComponent } from "@/components/Charts";
 import { DataTable } from "./user-table/data-table";
 import { columns, User } from "./user-table/columns";
+import { AddInternForm } from "./AddInternForm";
+import { AddSupervisorForm } from "./AddSupervisorForm";
+
+// Helper function to safely decode JWT payload (since we cannot use external libraries)
+// This extracts the JSON payload from the middle segment of the JWT.
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split(".")[1];
+    // Convert base64url to base64 format
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+
+    // Decode base64 and handle encoding issues
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
+};
+
+//function to generate initials from name
+const getInitials = (fullName: string) => {
+  const names = (fullName || "").trim().split(" ");
+  const firstInitial = names[0]?.charAt(0).toUpperCase() || "";
+  const lastInitial = names[names.length - 1]?.charAt(0).toUpperCase() || "";
+  return `${firstInitial}${lastInitial}`;
+};
 
 const AdminDashboard = () => {
   const token = useAuthStore((state) => state.token);
-  const [users, setUsers] = useState<User[]>([]);
 
-  const fetchUsers = async () => {
-    if (!token) return;
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      }
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
+  const [adminId, setAdminId] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false); // New state to control data fetching
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [adminProfile, setAdminProfile] = useState<User | null>(null);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   useEffect(() => {
-    fetchUsers();
+    if (token) {
+      const tokenPayload = decodeJwt(token);
+      const id =
+        tokenPayload?.userId?.toString() || tokenPayload?.sub?.toString();
+      if (id) {
+        setAdminId(id);
+      }
+      // Once we've checked the token, we are initialized (even if ID is null)
+      setIsInitialized(true);
+    }
   }, [token]);
+
+  const fetchUsers = useCallback(
+    async (currentAdminId: string | null, setProfile = true) => {
+      if (!token || !currentAdminId) {
+        // If we don't have a token or an ID, we can't fetch the list for profiling.
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setFetchError(null);
+
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data: User[] = await response.json();
+          setUsers(data);
+
+          // Find the admin profile using the ID extracted from the token
+          if (setProfile) {
+            const currentAdmin = data.find(
+              (user) => user.id.toString() === currentAdminId
+            );
+
+            if (currentAdmin) {
+              setAdminProfile(currentAdmin);
+              console.log(
+                "Admin Profile found and set:",
+                currentAdmin.fullName
+              );
+            } else {
+              console.warn(
+                `Admin user with ID ${currentAdminId} not found in the fetched user list.`
+              );
+              setAdminProfile({
+                id: 0,
+                fullName: "Fallback Admin User",
+                email: "default@company.com",
+                role: "ADMIN",
+              });
+            }
+          }
+        } else {
+          const errorText = await response.text();
+          console.error(
+            `Server error fetching users (Status: ${response.status}):`,
+            errorText
+          );
+          setFetchError(
+            `Failed to load user list: Server returned status ${response.status}. Please check your backend logs.`
+          );
+          setUsers([]);
+        }
+      } catch (error) {
+        console.error("Network error fetching users:", error);
+        setFetchError(
+          "A network error occurred. Ensure the API server is running at localhost:4000."
+        );
+        setUsers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [token]
+  );
+
+  useEffect(() => {
+    if (isInitialized) {
+      fetchUsers(adminId);
+    }
+  }, [isInitialized, adminId, fetchUsers]);
 
   const handleDeleteUser = async (userId: number) => {
     if (!token) return;
@@ -62,7 +174,7 @@ const AdminDashboard = () => {
 
       if (response.ok) {
         // If delete is successful, refresh the user list to update the UI
-        fetchUsers();
+        fetchUsers(adminId, false);
       } else {
         const errorData = await response.json();
         alert(`Failed to delete user: ${errorData.error}`);
@@ -77,30 +189,32 @@ const AdminDashboard = () => {
   const totalSupervisors = users.filter(
     (user) => user.role === "SUPERVISOR"
   ).length;
+  const fullName = adminProfile?.fullName || "Admin User";
+  const initials = adminProfile ? getInitials(adminProfile.fullName) : "AU";
+  const supervisors = users.filter((user) => user.role === "SUPERVISOR");
 
   return (
     <div>
       <header className="flex items-center justify-between shadow-sm p-4 bg-white">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome, Sarah Johnson</p>
+          <p className="text-muted-foreground">Welcome, {fullName}</p>
         </div>
         <div className="bg-primary/10 text-primary rounded-full h-10 w-10 flex items-center justify-center font-medium">
-          <p>SJ</p>
+          <p>{initials}</p>
         </div>
       </header>
 
       <main className="p-4">
         <div className="flex items-center justify-between mb-6">
-          <p> Here&apos;s your internship program overview.</p>
+          <p>Here&apos;s your internship program overview.</p>
 
           <div className="flex gap-2">
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Intern
-            </Button>
-            <Button variant="outline">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Supervisor
-            </Button>
+            <AddInternForm
+              onUserAdded={() => fetchUsers(adminId, false)}
+              supervisors={supervisors}
+            />
+            <AddSupervisorForm onUserAdded={() => fetchUsers(adminId, false)} />
           </div>
         </div>
         {/* Top Summary Cards */}
@@ -199,7 +313,10 @@ const AdminDashboard = () => {
             <DataTable
               columns={columns}
               data={users}
-              onDeleteUser={handleDeleteUser}
+              columnFilters={columnFilters}
+              setColumnFilters={setColumnFilters}
+              searchColumnId="fullName"
+              meta={{ deleteUser: handleDeleteUser }}
             />
           </CardContent>
         </Card>

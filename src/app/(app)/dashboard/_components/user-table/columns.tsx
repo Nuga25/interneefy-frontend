@@ -17,7 +17,6 @@ export type User = {
   fullName: string;
   email: string;
   role: "ADMIN" | "SUPERVISOR" | "INTERN";
-  companyName: string; 
 };
 
 // --- 2. Define the Columns Array ---
@@ -37,51 +36,51 @@ export const columns: ColumnDef<User>[] = [
       );
     },
     cell: ({ row }) => (
-        <span className="font-medium text-primary">
-            {row.getValue("fullName")}
-        </span>
+      <span className="font-medium text-primary">
+        {row.getValue("fullName")}
+      </span>
     ),
   },
-  
+
   // Email Column
   {
     accessorKey: "email",
     header: "Email",
   },
-  
+
   // Role Column (Filterable)
   {
     accessorKey: "role",
     header: "Role",
     cell: ({ row }) => {
-        const role = row.getValue("role") as User["role"];
-        let variant: "default" | "secondary" | "outline" = "outline";
+      const role = row.getValue("role") as User["role"];
+      let variant: "default" | "secondary" | "outline" = "outline";
 
-        if (role === 'ADMIN') variant = 'default';
-        else if (role === 'SUPERVISOR') variant = 'secondary';
-        
-        return (
-            <Badge variant={variant} className="min-w-[100px] justify-center">
-                {role}
-            </Badge>
-        );
+      if (role === "ADMIN") variant = "default";
+      else if (role === "SUPERVISOR") variant = "secondary";
+
+      return (
+        <Badge variant={variant} className="min-w-[100px] justify-center">
+          {role}
+        </Badge>
+      );
     },
     filterFn: (row, id, value) => {
-        const role = row.getValue(id) as string;
-        if (value === "ALL" || !value) return true;
-        return role === value;
-    }
+      const role = row.getValue(id) as string;
+      if (value === "ALL" || !value) return true;
+      return role === value;
+    },
   },
-  
+
   // Company Name Column
   {
     accessorKey: "companyName",
     header: "Company",
     cell: ({ row }) => (
-        <span className="text-muted-foreground text-sm">
-            {row.getValue("companyName")}
-        </span>
-    )
+      <span className="text-muted-foreground text-sm">
+        {row.getValue("companyName")}
+      </span>
+    ),
   },
 
   // Actions Column (View, Message, Delete)
@@ -91,7 +90,9 @@ export const columns: ColumnDef<User>[] = [
     cell: ({ row, table }) => {
       const user = row.original;
       // Get the delete function from the table's meta data
-      const onDeleteUser = (table.options.meta as { deleteUser?: (id: number) => void })?.deleteUser;
+      const onDeleteUser = (
+        table.options.meta as { deleteUser?: (id: number) => void }
+      )?.deleteUser;
 
       // Mock function for viewing details (would typically open a modal or navigate)
       const handleViewUser = () => {
@@ -103,7 +104,7 @@ export const columns: ColumnDef<User>[] = [
       const handleMessageUser = () => {
         window.location.href = `mailto:${user.email}?subject=Message%20from%20Company%20Admin`;
       };
-      
+
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -114,30 +115,30 @@ export const columns: ColumnDef<User>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            
+
             {/* 1. The new View option */}
             <DropdownMenuItem onClick={handleViewUser}>
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
-            
+
             {/* 2. The new Message option */}
             <DropdownMenuItem onClick={handleMessageUser}>
-                <Mail className="mr-2 h-4 w-4" />
-                Message User
+              <Mail className="mr-2 h-4 w-4" />
+              Message User
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
-            
+
             {/* 3. The Delete option */}
-            <DropdownMenuItem 
-                onClick={() => onDeleteUser && onDeleteUser(user.id)}
-                className="text-destructive focus:text-destructive"
+            <DropdownMenuItem
+              onClick={() => onDeleteUser && onDeleteUser(user.id)}
+              className="text-destructive focus:text-destructive"
             >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Account
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Account
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -23,13 +23,18 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/DatePicker";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface AddUserFormProps {
+interface AddInternFormProps {
   onUserAdded: () => void;
+  supervisors?: Array<{ id: number; fullName: string }>;
 }
 
-export function AddInternForm({ onUserAdded }: AddUserFormProps) {
+export function AddInternForm({
+  onUserAdded,
+  supervisors = [],
+}: AddInternFormProps) {
   const [open, setOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,16 +43,28 @@ export function AddInternForm({ onUserAdded }: AddUserFormProps) {
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const token = useAuthStore((state) => state.token);
+
+  const resetForm = () => {
+    setFullName("");
+    setEmail("");
+    setDomain("");
+    setSupervisor("");
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setNotes("");
+    setError("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
 
-    // NOTE: We are only sending the data our backend currently supports.
-    // We will update this later to send all the new fields.
-    const password = "password123";
+    setIsSubmitting(true);
+    setError("");
 
     try {
       const response = await fetch(
@@ -58,24 +75,40 @@ export function AddInternForm({ onUserAdded }: AddUserFormProps) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ fullName, email, password, role: "INTERN" }),
+          body: JSON.stringify({
+            fullName,
+            email,
+            role: "INTERN",
+            supervisorId: supervisor ? parseInt(supervisor) : null,
+          }),
         }
       );
 
       if (response.ok) {
         onUserAdded();
         setOpen(false);
-        // Reset form fields
+        resetForm();
       } else {
-        alert("Failed to add intern.");
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to add intern. Please try again.");
       }
     } catch (error) {
-      alert("An error occurred.");
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) {
+          resetForm();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" /> Add Intern
@@ -88,31 +121,45 @@ export function AddInternForm({ onUserAdded }: AddUserFormProps) {
             Create a new intern profile and assign them to a supervisor.
           </DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
+            <Label htmlFor="fullName">Full Name *</Label>
             <Input
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Enter intern's full name"
               required
+              disabled={isSubmitting}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
+            <Label htmlFor="email">Email Address *</Label>
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter intern's email"
+              placeholder="intern@company.com"
               required
+              disabled={isSubmitting}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="domain">Domain</Label>
-            <Select onValueChange={setDomain} value={domain}>
+            <Select
+              onValueChange={setDomain}
+              value={domain}
+              disabled={isSubmitting}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a domain" />
               </SelectTrigger>
@@ -127,24 +174,45 @@ export function AddInternForm({ onUserAdded }: AddUserFormProps) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="supervisor">Supervisor</Label>
-            <Select onValueChange={setSupervisor} value={supervisor}>
+            <Select
+              onValueChange={setSupervisor}
+              value={supervisor}
+              disabled={isSubmitting}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a supervisor" />
               </SelectTrigger>
               <SelectContent>
-                {/* TODO: Fetch this list from the API */}
-                <SelectItem value="david">David Supervisor</SelectItem>
+                {supervisors.length > 0 ? (
+                  supervisors.map((sup) => (
+                    <SelectItem key={sup.id} value={sup.id.toString()}>
+                      {sup.fullName}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>
+                    No supervisors available
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="startDate">Start Date</Label>
-              <DatePicker date={startDate} setDate={setStartDate} />
+              <DatePicker
+                date={startDate}
+                setDate={setStartDate}
+                disabled={isSubmitting}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="endDate">End Date</Label>
-              <DatePicker date={endDate} setDate={setEndDate} />
+              <DatePicker
+                date={endDate}
+                setDate={setEndDate}
+                disabled={isSubmitting}
+              />
             </div>
           </div>
           <div className="space-y-2">
@@ -154,6 +222,7 @@ export function AddInternForm({ onUserAdded }: AddUserFormProps) {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Any additional notes or comments..."
+              disabled={isSubmitting}
             />
           </div>
           <DialogFooter>
@@ -161,10 +230,13 @@ export function AddInternForm({ onUserAdded }: AddUserFormProps) {
               type="button"
               variant="ghost"
               onClick={() => setOpen(false)}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="submit">Add Intern</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Intern"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
