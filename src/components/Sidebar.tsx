@@ -81,12 +81,6 @@ export function Sidebar() {
       roles: ["INTERN", "SUPERVISOR"],
     }, // Supervisors manage tasks too
     {
-      href: "/dashboard/profile",
-      label: "My Profile",
-      icon: User,
-      roles: ["INTERN", "SUPERVISOR", "ADMIN"],
-    }, // Everyone has a profile
-    {
       href: "/dashboard/settings",
       label: "Settings",
       icon: Settings,
@@ -95,7 +89,7 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-foreground text-background p-4 flex flex-col">
+    <aside className="hidden lg:flex w-64 flex-shrink-0 bg-foreground text-background p-4 flex-col min-h-[100%]">
       <div className="p-4 mb-4 border-b border-muted/20">
         <Link href="/dashboard" className="flex items-center gap-2">
           <span className="font-bold text-2xl">TechCorp Solutions</span>{" "}
