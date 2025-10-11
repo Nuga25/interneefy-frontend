@@ -14,30 +14,55 @@ import {
   Cell,
 } from "recharts";
 
-// Mock data for the Bar Chart
-const enrollmentData = [
-  { name: "May", interns: 4 },
-  { name: "June", interns: 3 },
-  { name: "July", interns: 7 },
-  { name: "Aug", interns: 5 },
-  { name: "Sep", interns: 8 },
-];
+// Types for chart data
+type EnrollmentData = {
+  name: string;
+  interns: number;
+};
 
-// Mock data for the Pie Chart
-const domainData = [
-  { name: "Engineering", value: 12 },
-  { name: "Design", value: 5 },
-  { name: "Marketing", value: 4 },
-  { name: "Product", value: 4 },
-];
+type DomainData = {
+  name: string;
+  value: number;
+};
 
-const COLORS = ["#4338CA", "#7C3AED", "#10b981", "#f59e0b"];
+const COLORS = [
+  "#4338CA",
+  "#7C3AED",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#ec4899",
+];
 
 // --- Bar Chart Component ---
-export const BarChartComponent = () => {
+interface BarChartComponentProps {
+  data?: EnrollmentData[];
+  isLoading?: boolean;
+}
+
+export const BarChartComponent = ({
+  data = [],
+  isLoading = false,
+}: BarChartComponentProps) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Loading chart data...</p>
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">No enrollment data available</p>
+      </div>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={enrollmentData}>
+      <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
         <YAxis fontSize={12} tickLine={false} axisLine={false} />
@@ -60,12 +85,36 @@ export const BarChartComponent = () => {
 };
 
 // --- Pie Chart Component ---
-export const PieChartComponent = () => {
+interface PieChartComponentProps {
+  data?: DomainData[];
+  isLoading?: boolean;
+}
+
+export const PieChartComponent = ({
+  data = [],
+  isLoading = false,
+}: PieChartComponentProps) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Loading chart data...</p>
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">No distribution data available</p>
+      </div>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <PieChart>
         <Pie
-          data={domainData}
+          data={data}
           cx="50%"
           cy="50%"
           labelLine={false}
@@ -73,8 +122,11 @@ export const PieChartComponent = () => {
           fill="#8884d8"
           dataKey="value"
           nameKey="name"
+          label={({ name, percent }) =>
+            `${name} ${(percent * 100).toFixed(0)}%`
+          }
         >
-          {domainData.map((entry, index) => (
+          {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>

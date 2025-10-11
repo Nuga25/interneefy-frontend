@@ -71,6 +71,14 @@ const AdminDashboard = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
+  const [enrollmentData, setEnrollmentData] = useState<
+    Array<{ name: string; interns: number }>
+  >([]);
+  const [domainData, setDomainData] = useState<
+    Array<{ name: string; value: number }>
+  >([]);
+  const [chartsLoading, setChartsLoading] = useState(true);
+
   useEffect(() => {
     if (token) {
       const tokenPayload = decodeJwt(token);
@@ -155,11 +163,55 @@ const AdminDashboard = () => {
     [token]
   );
 
+  // Function to fetch chart statistics
+  const fetchChartStatistics = useCallback(async () => {
+    if (!token) return;
+
+    setChartsLoading(true);
+    try {
+      // Fetch enrollment data
+      const enrollmentResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/statistics/enrollment`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      // Fetch domain distribution data
+      const domainResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/statistics/domains`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (enrollmentResponse.ok) {
+        const enrollmentData = await enrollmentResponse.json();
+        setEnrollmentData(enrollmentData);
+      }
+
+      if (domainResponse.ok) {
+        const domainData = await domainResponse.json();
+        setDomainData(domainData);
+      }
+    } catch (error) {
+      console.error("Error fetching chart statistics:", error);
+    } finally {
+      setChartsLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (isInitialized) {
       fetchUsers(adminId);
     }
   }, [isInitialized, adminId, fetchUsers]);
+
+  useEffect(() => {
+    if (isInitialized && token) {
+      fetchChartStatistics();
+    }
+  }, [isInitialized, token, fetchChartStatistics]);
 
   const handleDeleteUser = async (userId: number) => {
     if (!token) return;
@@ -281,22 +333,25 @@ const AdminDashboard = () => {
             <CardHeader>
               <CardTitle>Intern Enrollment Over Time</CardTitle>
               <CardDescription>
-                A look at intern sign-ups this semester.
+                Recent intern sign-ups in your company.
               </CardDescription>
             </CardHeader>
             <CardContent className="h-80">
-              <BarChartComponent />
+              <BarChartComponent
+                data={enrollmentData}
+                isLoading={chartsLoading}
+              />
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Interns by Domain</CardTitle>
+              <CardTitle>Interns by Supervisor</CardTitle>
               <CardDescription>
-                Distribution of interns across departments.
+                Distribution of interns across supervisors.
               </CardDescription>
             </CardHeader>
             <CardContent className="h-80">
-              <PieChartComponent />
+              <PieChartComponent data={domainData} isLoading={chartsLoading} />
             </CardContent>
           </Card>
         </div>
