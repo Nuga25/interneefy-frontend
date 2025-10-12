@@ -1,360 +1,418 @@
+// app/(app)/dashboard/_components/SupervisorDashboard.tsx
+
 "use client";
 
+import { useEffect, useState, useCallback } from "react";
+import { useAuthStore } from "@/stores/authStore";
 import {
   Card,
-  CardHeader,
   CardContent,
+  CardHeader,
   CardTitle,
-  CardFooter,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress"; // Assuming you have a progress bar component
 import {
-  Plus,
-  Clock,
   Users,
-  CheckCircle,
+  CheckCircle2,
+  Clock,
   TrendingUp,
-  ChevronRight,
+  UserPlus,
+  ClipboardCheck,
 } from "lucide-react";
-import Link from "next/link";
-import React from "react";
+import { BarChartComponent } from "@/components/Charts";
 
-// --- Mock Data Structures (Replace with real data fetching) ---
-// Note: In a real app, this data would come from API calls filtered by the Supervisor's ID.
-type InternProgress = {
+// Types
+type Intern = {
   id: number;
-  name: string;
+  fullName: string;
+  email: string;
   domain: string;
-  completed: number;
-  inProgress: number;
-  pending: number;
-  totalTasks: number;
-  lastActivityDaysAgo: number;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  activeTasks: number;
 };
 
-type PendingReview = {
+type Task = {
   id: number;
   title: string;
-  priority: "High" | "Medium" | "Low";
-  completedBy: string;
-  daysAgo: number;
+  internName: string;
+  status: string;
+  dueDate: string;
+  priority: string;
 };
 
-const mockInternsProgress: InternProgress[] = [
-  {
-    id: 1,
-    name: "Alice Johnson",
-    domain: "Software Engineering",
-    completed: 5,
-    inProgress: 2,
-    pending: 1,
-    totalTasks: 8,
-    lastActivityDaysAgo: 3,
-  },
-  {
-    id: 2,
-    name: "Frank Thompson",
-    domain: "Software Engineering",
-    completed: 3,
-    inProgress: 1,
-    pending: 1,
-    totalTasks: 5,
-    lastActivityDaysAgo: 5,
-  },
-  {
-    id: 3,
-    name: "Mike Chen",
-    domain: "Product Design",
-    completed: 6,
-    inProgress: 0,
-    pending: 0,
-    totalTasks: 6,
-    lastActivityDaysAgo: 1,
-  },
-];
-
-const mockPendingReviews: PendingReview[] = [
-  {
-    id: 101,
-    title: "React Component Development",
-    priority: "High",
-    completedBy: "Alice Johnson",
-    daysAgo: 2,
-  },
-  {
-    id: 102,
-    title: "Database Design Documentation",
-    priority: "Medium",
-    completedBy: "Frank Thompson",
-    daysAgo: 5,
-  },
-  {
-    id: 103,
-    title: "Data Analysis Report",
-    priority: "Medium",
-    completedBy: "Mike Chen",
-    daysAgo: 1,
-  },
-];
-
-const getTotalCompletionRate = (interns: InternProgress[]) => {
-  const totalCompleted = interns.reduce((sum, i) => sum + i.completed, 0);
-  const totalAssigned = interns.reduce((sum, i) => sum + i.totalTasks, 0);
-  if (totalAssigned === 0) return 0;
-  return Math.round((totalCompleted / totalAssigned) * 100);
+type Activity = {
+  id: number;
+  message: string;
+  timestamp: string;
+  type: "task" | "evaluation" | "intern";
 };
 
-// --- Sub-Components for Dashboard Structure ---
-
-const StatusBadge: React.FC<{ priority: PendingReview["priority"] }> = ({
-  priority,
-}) => {
-  let colorClass = "";
-  switch (priority) {
-    case "High":
-      colorClass =
-        "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400";
-      break;
-    case "Medium":
-      colorClass =
-        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400";
-      break;
-    case "Low":
-      colorClass =
-        "bg-green-100 text-green-700 dark:bg-green-700/50 dark:text-green-400";
-      break;
+// Helper function to decode JWT
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
   }
-  return (
-    <span
-      className={`px-2 py-0.5 text-xs font-medium rounded-full ${colorClass}`}
-    >
-      {priority} Priority
-    </span>
-  );
 };
 
-const InternProgressOverview: React.FC<{ data: InternProgress }> = ({
-  data,
-}) => {
-  const completionPercentage =
-    data.totalTasks > 0
-      ? Math.round((data.completed / data.totalTasks) * 100)
+const getInitials = (fullName: string) => {
+  const names = (fullName || "").trim().split(" ");
+  const firstInitial = names[0]?.charAt(0).toUpperCase() || "";
+  const lastInitial = names[names.length - 1]?.charAt(0).toUpperCase() || "";
+  return `${firstInitial}${lastInitial}`;
+};
+
+const SupervisorDashboard = () => {
+  const token = useAuthStore((state) => state.token);
+
+  const [supervisorName, setSupervisorName] = useState<string>("Supervisor");
+  const [interns, setInterns] = useState<Intern[]>([]);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const [taskStats, setTaskStats] = useState({
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    completed: 0,
+  });
+  const [taskChartData, setTaskChartData] = useState<
+    Array<{ name: string; tasks: number }>
+  >([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Mock data for now - replace with actual API calls
+  useEffect(() => {
+    if (token) {
+      const tokenPayload = decodeJwt(token);
+      setSupervisorName(tokenPayload?.fullName || "Supervisor");
+
+      // Mock interns data
+      setInterns([
+        {
+          id: 1,
+          fullName: "John Doe",
+          email: "john@example.com",
+          domain: "Software Development",
+          startDate: "2025-01-15",
+          endDate: "2025-06-15",
+          progress: 65,
+          activeTasks: 3,
+        },
+        {
+          id: 2,
+          fullName: "Jane Smith",
+          email: "jane@example.com",
+          domain: "UI/UX Design",
+          startDate: "2025-02-01",
+          endDate: "2025-07-01",
+          progress: 45,
+          activeTasks: 2,
+        },
+        {
+          id: 3,
+          fullName: "Mike Johnson",
+          email: "mike@example.com",
+          domain: "Data Analytics",
+          startDate: "2025-01-20",
+          endDate: "2025-06-20",
+          progress: 80,
+          activeTasks: 1,
+        },
+      ]);
+
+      // Mock task stats
+      setTaskStats({
+        total: 15,
+        pending: 4,
+        inProgress: 6,
+        completed: 5,
+      });
+
+      // Mock chart data
+      setTaskChartData([
+        { name: "TODO", tasks: 4 },
+        { name: "IN PROGRESS", tasks: 6 },
+        { name: "COMPLETED", tasks: 5 },
+      ]);
+
+      // Mock recent activities
+      setRecentActivities([
+        {
+          id: 1,
+          message: "John Doe completed 'API Integration' task",
+          timestamp: "2 hours ago",
+          type: "task",
+        },
+        {
+          id: 2,
+          message: "Jane Smith updated 'Design Wireframes' to In Progress",
+          timestamp: "5 hours ago",
+          type: "task",
+        },
+        {
+          id: 3,
+          message: "Evaluation submitted for Mike Johnson",
+          timestamp: "1 day ago",
+          type: "evaluation",
+        },
+        {
+          id: 4,
+          message: "New intern Sarah Williams assigned to you",
+          timestamp: "2 days ago",
+          type: "intern",
+        },
+      ]);
+
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  const completionRate =
+    interns.length > 0
+      ? Math.round(
+          interns.reduce((acc, intern) => acc + intern.progress, 0) /
+            interns.length
+        )
       : 0;
+
+  const initials = getInitials(supervisorName);
+
   return (
-    <div className="border-b dark:border-gray-800 pb-4 last:border-b-0">
-      <div className="flex items-center justify-between">
+    <div>
+      <header className="flex items-center justify-between shadow-sm p-4 bg-white">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">{data.name}</h3>
-          <p className="text-sm text-muted-foreground">{data.domain}</p>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">Welcome, {supervisorName}</p>
         </div>
-        <div className="flex items-center text-primary font-bold">
-          {completionPercentage}% <ChevronRight className="w-4 h-4 ml-1" />
+        <div className="bg-primary/10 text-primary rounded-full h-10 w-10 flex items-center justify-center font-medium">
+          <p>{initials}</p>
         </div>
-      </div>
+      </header>
 
-      <Progress value={completionPercentage} className="h-2 my-2" />
+      <main className="p-4">
+        <p className="mb-6">Here&apos;s your supervision overview.</p>
 
-      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-        <p>
-          <span className="font-semibold text-green-600">{data.completed}</span>{" "}
-          Completed
-        </p>
-        <p>
-          <span className="font-semibold text-yellow-600">
-            {data.inProgress}
-          </span>{" "}
-          In Progress
-        </p>
-        <p>
-          <span className="font-semibold text-red-600">{data.pending}</span>{" "}
-          Pending
-        </p>
-      </div>
-      <p className="text-xs text-right mt-1 text-gray-500">
-        Last activity: {data.lastActivityDaysAgo} days ago
-      </p>
+        {/* Summary Cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Interns
+              </CardTitle>
+              <Users className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                {interns.length}
+              </div>
+              <small>Under supervision</small>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                {taskStats.total}
+              </div>
+              <small>Assigned tasks</small>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Pending Tasks
+              </CardTitle>
+              <Clock className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                {taskStats.pending}
+              </div>
+              <small>Awaiting action</small>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Completion Rate
+              </CardTitle>
+              <TrendingUp className="h-4 w-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                {completionRate}%
+              </div>
+              <small>Average progress</small>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts and Activities */}
+        <div className="grid gap-4 md:grid-cols-2 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tasks by Status</CardTitle>
+              <CardDescription>Overview of all assigned tasks</CardDescription>
+            </CardHeader>
+            <CardContent className="h-80">
+              <BarChartComponent data={taskChartData} isLoading={isLoading} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>
+                Latest updates from your interns
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentActivities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-start gap-3 pb-3 border-b last:border-0"
+                  >
+                    <div
+                      className={`h-2 w-2 rounded-full mt-2 ${
+                        activity.type === "task"
+                          ? "bg-blue-500"
+                          : activity.type === "evaluation"
+                          ? "bg-green-500"
+                          : "bg-purple-500"
+                      }`}
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm">{activity.message}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {activity.timestamp}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Supervised Interns */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Supervised Interns</CardTitle>
+              <CardDescription>
+                Track progress of interns under your supervision
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Assign Task
+              </Button>
+              <Button size="sm">
+                <ClipboardCheck className="h-4 w-4 mr-2" />
+                Submit Evaluation
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {interns.map((intern) => (
+                <Card key={intern.id}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="bg-primary/10 text-primary rounded-full h-10 w-10 flex items-center justify-center font-medium">
+                            {getInitials(intern.fullName)}
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{intern.fullName}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {intern.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Domain
+                            </p>
+                            <p className="text-sm font-medium">
+                              {intern.domain}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Active Tasks
+                            </p>
+                            <p className="text-sm font-medium">
+                              {intern.activeTasks}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Start Date
+                            </p>
+                            <p className="text-sm font-medium">
+                              {new Date(intern.startDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Progress
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-muted rounded-full h-2">
+                                <div
+                                  className="bg-primary h-2 rounded-full transition-all"
+                                  style={{ width: `${intern.progress}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {intern.progress}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2 ml-4">
+                        <Button size="sm" variant="outline">
+                          View Profile
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          Assign Task
+                        </Button>
+                        <Button size="sm">Evaluate</Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 };
 
-const PendingReviewItem: React.FC<{ review: PendingReview }> = ({ review }) => {
-  return (
-    <div className="p-4 border-b dark:border-gray-800 last:border-b-0">
-      <div className="flex justify-between items-start">
-        <h3 className="font-semibold text-foreground">{review.title}</h3>
-        <StatusBadge priority={review.priority} />
-      </div>
-      <p className="text-sm text-muted-foreground mt-1">
-        Completed by {review.completedBy}
-      </p>
-      <div className="flex justify-between items-center mt-2">
-        <p className="text-xs text-gray-500">
-          <Clock className="inline h-3 w-3 mr-1" /> Submitted {review.daysAgo}{" "}
-          days ago
-        </p>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/dashboard/tasks/review/${review.id}`}>Review Task</Link>
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-// --- Main Supervisor Dashboard Component ---
-
-export default function SupervisorDashboard() {
-  const totalCompletionRate = getTotalCompletionRate(mockInternsProgress);
-  const totalTasksAssigned = mockInternsProgress.reduce(
-    (sum, i) => sum + i.totalTasks,
-    0
-  );
-  const totalTasksCompleted = mockInternsProgress.reduce(
-    (sum, i) => sum + i.completed,
-    0
-  );
-
-  return (
-    <div className="p-6 space-y-8">
-      {/* Header and Action Button */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Supervisor Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Welcome back, Mike Chen. Here&apos;s what needs your attention
-            today.
-          </p>
-        </div>
-        <Button size="lg" asChild>
-          <Link href="/dashboard/tasks/new">
-            <Plus className="h-5 w-5 mr-2" /> Create New Task
-          </Link>
-        </Button>
-      </div>
-
-      {/* 1. Key Metric Cards Grid */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Interns</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {mockInternsProgress.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currently supervising
-            </p>
-          </CardContent>
-          <CardFooter className="pt-0">
-            <Link
-              href="/dashboard/interns"
-              className="text-sm text-primary flex items-center"
-            >
-              View all <ChevronRight className="h-4 w-4 ml-1" />
-            </Link>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Reviews
-            </CardTitle>
-            <Clock className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">
-              {mockPendingReviews.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tasks awaiting your approval
-            </p>
-          </CardContent>
-          <CardFooter className="pt-0">
-            <Link
-              href="/dashboard/tasks?status=pending"
-              className="text-sm text-primary flex items-center"
-            >
-              Review now <ChevronRight className="h-4 w-4 ml-1" />
-            </Link>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Tasks Assigned
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTasksAssigned}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {totalTasksCompleted} completed,{" "}
-              {totalTasksAssigned - totalTasksCompleted} remaining
-            </p>
-          </CardContent>
-          <CardFooter className="pt-0">
-            <Link
-              href="/dashboard/tasks"
-              className="text-sm text-primary flex items-center"
-            >
-              Manage tasks <ChevronRight className="h-4 w-4 ml-1" />
-            </Link>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Team Progress</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCompletionRate}%</div>
-            <Progress value={totalCompletionRate} className="h-2 my-1" />
-            <p className="text-xs text-muted-foreground mt-1">
-              Average task completion rate
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 2. Main Content Area (Interns Overview & Pending Reviews) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-7">
-        {/* Left Side: Interns Overview */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>My Interns Overview</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Progress and status of your assigned interns.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {mockInternsProgress.map((intern) => (
-              <InternProgressOverview key={intern.id} data={intern} />
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Right Side: Pending Reviews */}
-        <Card className="lg:col-span-4">
-          <CardHeader>
-            <CardTitle>Pending Reviews</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Tasks completed by interns awaiting your approval.
-            </p>
-          </CardHeader>
-          <CardContent className="divide-y divide-border px-0">
-            {mockPendingReviews.map((review) => (
-              <PendingReviewItem key={review.id} review={review} />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
+export default SupervisorDashboard;

@@ -1,414 +1,386 @@
+// app/(app)/dashboard/myInterns/page.tsx
+
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuthStore } from "@/stores/authStore";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Search,
-  Users,
-  Eye,
-  Clock,
+  Filter,
+  UserPlus,
+  ClipboardCheck,
+  Mail,
   Calendar,
-  MessageSquare,
+  TrendingUp,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress"; // Assuming you have a progress bar component
-
-// --- Mock Data Structures ---
-
-type InternStatus = "Active" | "On Leave" | "Completed";
-type TaskStatus = "Completed" | "In Progress" | "Pending" | "Overdue";
-
-type Task = {
-  id: number;
-  title: string;
-  status: TaskStatus;
-  dueDate: string;
-  tags: string[];
-};
 
 type Intern = {
   id: number;
-  name: string;
+  fullName: string;
   email: string;
-  status: InternStatus;
   domain: string;
-  university: string;
-  progressPercentage: number;
-  totalTasks: number;
+  startDate: string;
+  endDate: string;
+  status: "Active" | "Completed";
+  progress: number;
+  activeTasks: number;
   completedTasks: number;
-  inProgressTasks: number;
-  pendingTasks: number;
-  lastActivity: string;
-  recentTasks: Task[];
 };
 
-// Simulated data filtered for the current supervisor
-const mockInterns: Intern[] = [
-  {
-    id: 1,
-    name: "Alice Johnson",
-    email: "alice@company.com",
-    status: "Active",
-    domain: "Software Engineering",
-    university: "Stanford University",
-    progressPercentage: 62.5,
-    totalTasks: 8,
-    completedTasks: 5,
-    inProgressTasks: 2,
-    pendingTasks: 1,
-    lastActivity: "57d ago",
-    recentTasks: [
-      {
-        id: 101,
-        title: "React Component Development",
-        status: "Completed",
-        dueDate: "3/15/2024",
-        tags: ["React", "TypeScript"],
-      },
-      {
-        id: 102,
-        title: "API Integration",
-        status: "In Progress",
-        dueDate: "3/22/2024",
-        tags: ["Node.js", "Express"],
-      },
-      {
-        id: 103,
-        title: "Unit Testing",
-        status: "Pending",
-        dueDate: "3/28/2024",
-        tags: ["Jest"],
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Frank Thompson",
-    email: "frank@company.com",
-    status: "Active",
-    domain: "Product Design",
-    university: "Carnegie Mellon",
-    progressPercentage: 50,
-    totalTasks: 10,
-    completedTasks: 5,
-    inProgressTasks: 3,
-    pendingTasks: 2,
-    lastActivity: "2d ago",
-    recentTasks: [
-      {
-        id: 201,
-        title: "UX Flowchart Draft",
-        status: "Completed",
-        dueDate: "4/01/2024",
-        tags: ["Figma"],
-      },
-      {
-        id: 202,
-        title: "User Interview Script",
-        status: "In Progress",
-        dueDate: "4/15/2024",
-        tags: ["Research"],
-      },
-      {
-        id: 203,
-        title: "Prototype Review",
-        status: "Pending",
-        dueDate: "4/20/2024",
-        tags: ["Figma"],
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: "Mike Chen",
-    email: "mike@company.com",
-    status: "On Leave",
-    domain: "Data Science",
-    university: "MIT",
-    progressPercentage: 100,
-    totalTasks: 5,
-    completedTasks: 5,
-    inProgressTasks: 0,
-    pendingTasks: 0,
-    lastActivity: "120d ago",
-    recentTasks: [
-      {
-        id: 301,
-        title: "Model Training Report",
-        status: "Completed",
-        dueDate: "1/10/2024",
-        tags: ["Python", "Pandas"],
-      },
-    ],
-  },
-];
-
-// --- Utility Components ---
-
-const TaskStatusTag: React.FC<{ status: TaskStatus }> = ({ status }) => {
-  let colorClass = "";
-  switch (status) {
-    case "Completed":
-      colorClass = "bg-green-500/10 text-green-600 border border-green-500/30";
-      break;
-    case "In Progress":
-      colorClass = "bg-blue-500/10 text-blue-600 border border-blue-500/30";
-      break;
-    case "Pending":
-      colorClass =
-        "bg-yellow-500/10 text-yellow-600 border border-yellow-500/30";
-      break;
-    case "Overdue":
-      colorClass = "bg-red-500/10 text-red-600 border border-red-500/30";
-      break;
-  }
-  return (
-    <span
-      className={`px-3 py-1 text-xs font-semibold rounded-full ${colorClass}`}
-    >
-      {status}
-    </span>
-  );
+const getInitials = (fullName: string) => {
+  const names = (fullName || "").trim().split(" ");
+  const firstInitial = names[0]?.charAt(0).toUpperCase() || "";
+  const lastInitial = names[names.length - 1]?.charAt(0).toUpperCase() || "";
+  return `${firstInitial}${lastInitial}`;
 };
 
-const MetricCard: React.FC<{
-  title: string;
-  value: string | number;
-  description: string;
-  valueColorClass?: string;
-}> = ({ title, value, description, valueColorClass = "text-foreground" }) => (
-  <Card className="flex-1 min-w-[200px] shadow-sm">
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">
-        {title}
-      </CardTitle>
-      <Users className="h-4 w-4 text-muted-foreground" />
-    </CardHeader>
-    <CardContent>
-      <div className={`text-3xl font-bold ${valueColorClass}`}>{value}</div>
-      <p className="text-xs text-muted-foreground pt-1">{description}</p>
-    </CardContent>
-  </Card>
-);
+const MyInternsPage = () => {
+  const token = useAuthStore((state) => state.token);
 
-// --- Main Page Component ---
-
-export default function SupervisorMyInternsPage() {
-  // NOTE: This entire component serves as the SupervisorMyInternsList content
-  const totalInterns = mockInterns.length;
-  const totalTasks = mockInterns.reduce((sum, i) => sum + i.totalTasks, 0);
-  const completedTasks = mockInterns.reduce(
-    (sum, i) => sum + i.completedTasks,
-    0
-  );
-  const averageProgress = (
-    mockInterns.reduce((sum, i) => sum + i.progressPercentage, 0) / totalInterns
-  ).toFixed(0);
-
+  const [interns, setInterns] = useState<Intern[]>([]);
+  const [filteredInterns, setFilteredInterns] = useState<Intern[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredInterns = mockInterns.filter(
-    (intern) =>
-      intern.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.university.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intern.domain.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Mock data - replace with API call
+  useEffect(() => {
+    if (token) {
+      const mockInterns: Intern[] = [
+        {
+          id: 1,
+          fullName: "John Doe",
+          email: "john@example.com",
+          domain: "Software Development",
+          startDate: "2025-01-15",
+          endDate: "2025-06-15",
+          status: "Active",
+          progress: 65,
+          activeTasks: 3,
+          completedTasks: 7,
+        },
+        {
+          id: 2,
+          fullName: "Jane Smith",
+          email: "jane@example.com",
+          domain: "UI/UX Design",
+          startDate: "2025-02-01",
+          endDate: "2025-07-01",
+          status: "Active",
+          progress: 45,
+          activeTasks: 2,
+          completedTasks: 4,
+        },
+        {
+          id: 3,
+          fullName: "Mike Johnson",
+          email: "mike@example.com",
+          domain: "Data Analytics",
+          startDate: "2025-01-20",
+          endDate: "2025-06-20",
+          status: "Active",
+          progress: 80,
+          activeTasks: 1,
+          completedTasks: 12,
+        },
+        {
+          id: 4,
+          fullName: "Sarah Williams",
+          email: "sarah@example.com",
+          domain: "Software Development",
+          startDate: "2024-09-01",
+          endDate: "2025-02-01",
+          status: "Completed",
+          progress: 100,
+          activeTasks: 0,
+          completedTasks: 15,
+        },
+        {
+          id: 5,
+          fullName: "David Brown",
+          email: "david@example.com",
+          domain: "Marketing",
+          startDate: "2025-01-10",
+          endDate: "2025-06-10",
+          status: "Active",
+          progress: 30,
+          activeTasks: 4,
+          completedTasks: 2,
+        },
+      ];
+
+      setInterns(mockInterns);
+      setFilteredInterns(mockInterns);
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  // Filter interns based on search and filters
+  useEffect(() => {
+    let filtered = interns;
+
+    if (searchTerm) {
+      filtered = filtered.filter((intern) =>
+        intern.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (domainFilter !== "all") {
+      filtered = filtered.filter((intern) => intern.domain === domainFilter);
+    }
+
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((intern) => intern.status === statusFilter);
+    }
+
+    setFilteredInterns(filtered);
+  }, [searchTerm, domainFilter, statusFilter, interns]);
+
+  const domains = Array.from(new Set(interns.map((intern) => intern.domain)));
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">My Interns</h1>
+    <div>
+      <header className="shadow-sm p-4 bg-white">
+        <h1 className="text-3xl font-bold">My Interns</h1>
         <p className="text-muted-foreground">
-          Manage and monitor your assigned interns&apos; progress and
-          performance.
+          Manage and track interns under your supervision
         </p>
-      </div>
+      </header>
 
-      {/* 1. Key Metrics Cards (Top Row) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title="Total Interns"
-          value={totalInterns}
-          description="Currently supervising"
-        />
-        <MetricCard
-          title="Total Tasks"
-          value={totalTasks}
-          description={`${completedTasks} completed, ${
-            totalTasks - completedTasks
-          } in progress/pending`}
-        />
-        <MetricCard
-          title="Completed Tasks"
-          value={completedTasks}
-          description="Total completed across all interns"
-          valueColorClass="text-green-600 dark:text-green-400"
-        />
-        <MetricCard
-          title="Average Progress"
-          value={`${averageProgress}%`}
-          description="Average completion rate of all tasks"
-          valueColorClass="text-blue-600 dark:text-blue-400"
-        />
-      </div>
-
-      {/* 2. Search Bar */}
-      <Card className="p-4 shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, email, or university..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </Card>
-
-      {/* 3. Intern Cards (The main list) */}
-      <div className="space-y-6">
-        {filteredInterns.map((intern) => (
-          <Card
-            key={intern.id}
-            className="p-6 border-l-4 border-primary/70 shadow-lg"
-          >
-            {/* Intern Header */}
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                  {intern.name}
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      intern.status === "Active"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-yellow-100 text-yellow-600"
-                    }`}
-                  >
-                    {intern.status}
-                  </span>
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {intern.email} | {intern.university}
-                </p>
+      <main className="p-4">
+        {/* Filters and Search */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search interns by name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  <MessageSquare className="h-4 w-4 mr-1" /> Contact
-                </Button>
-                <Button variant="default" size="sm">
-                  <Eye className="h-4 w-4 mr-1" /> View Details
-                </Button>
-              </div>
-            </div>
 
-            {/* Progress Overview */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center text-sm font-semibold mb-1">
-                <span>Overall Progress</span>
-                <span>{intern.progressPercentage}%</span>
-              </div>
-              <Progress
-                value={intern.progressPercentage}
-                className="h-2 mb-2"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                <div className="text-center">
-                  <p className="font-bold text-base text-foreground">
-                    {intern.totalTasks}
-                  </p>
-                  <p>Total Tasks</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-base text-green-600">
-                    {intern.completedTasks}
-                  </p>
-                  <p>Completed</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-base text-blue-600">
-                    {intern.inProgressTasks}
-                  </p>
-                  <p>In Progress</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-base text-yellow-600">
-                    {intern.pendingTasks}
-                  </p>
-                  <p>Pending</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Tasks */}
-            <CardDescription className="font-semibold mb-2 pt-2 border-t">
-              Recent Tasks
-            </CardDescription>
-            <div className="space-y-2">
-              {intern.recentTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex justify-between items-center text-sm"
-                >
-                  <span className="font-medium hover:text-primary transition-colors cursor-pointer">
-                    {task.title}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <TaskStatusTag status={task.status} />
-                    <span className="text-xs text-muted-foreground flex items-center">
-                      <Calendar className="h-3 w-3 mr-1" /> Due {task.dueDate}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Footer Info */}
-            <div className="mt-4 pt-4 border-t text-xs text-muted-foreground flex justify-between items-center">
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" /> Last active {intern.lastActivity}
-              </span>
-              <div className="flex gap-2">
-                {intern.recentTasks
-                  .flatMap((task) => task.tags)
-                  .filter((v, i, a) => a.indexOf(v) === i)
-                  .slice(0, 3)
-                  .map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-2 py-0.5 bg-gray-100 rounded text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                    >
-                      {tag}
-                    </span>
+              <Select value={domainFilter} onValueChange={setDomainFilter}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter by Domain" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Domains</SelectItem>
+                  {domains.map((domain) => (
+                    <SelectItem key={domain} value={domain}>
+                      {domain}
+                    </SelectItem>
                   ))}
-                {intern.recentTasks
-                  .flatMap((task) => task.tags)
-                  .filter((v, i, a) => a.indexOf(v) === i).length > 3 && (
-                  <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                    +
-                    {intern.recentTasks
-                      .flatMap((task) => task.tags)
-                      .filter((v, i, a) => a.indexOf(v) === i).length - 3}{" "}
-                    more
-                  </span>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+                </SelectContent>
+              </Select>
 
-      {filteredInterns.length === 0 && (
-        <div className="text-center p-10 text-muted-foreground border-2 border-dashed rounded-lg">
-          No interns found matching your search criteria.
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter by Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats Summary */}
+        <div className="grid gap-4 md:grid-cols-3 mb-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Interns
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{interns.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Active Interns
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {interns.filter((i) => i.status === "Active").length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Completed
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {interns.filter((i) => i.status === "Completed").length}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      )}
+
+        {/* Interns List */}
+        <div className="space-y-4">
+          {filteredInterns.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                No interns found matching your filters.
+              </CardContent>
+            </Card>
+          ) : (
+            filteredInterns.map((intern) => (
+              <Card key={intern.id}>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    {/* Intern Info */}
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="bg-primary/10 text-primary rounded-full h-12 w-12 flex items-center justify-center font-medium flex-shrink-0">
+                        {getInitials(intern.fullName)}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-lg">
+                            {intern.fullName}
+                          </h3>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              intern.status === "Active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {intern.status}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
+                          <div className="flex items-center gap-1">
+                            <Mail className="h-4 w-4" />
+                            <span>{intern.email}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <TrendingUp className="h-4 w-4" />
+                            <span>{intern.domain}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Start Date
+                            </p>
+                            <p className="text-sm font-medium flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(intern.startDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              End Date
+                            </p>
+                            <p className="text-sm font-medium flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(intern.endDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Active Tasks
+                            </p>
+                            <p className="text-sm font-medium">
+                              {intern.activeTasks}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Completed Tasks
+                            </p>
+                            <p className="text-sm font-medium">
+                              {intern.completedTasks}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs text-muted-foreground">
+                              Overall Progress
+                            </p>
+                            <span className="text-xs font-medium">
+                              {intern.progress}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div
+                              className="bg-primary h-2 rounded-full transition-all"
+                              style={{ width: `${intern.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex md:flex-col gap-2 justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 md:flex-none"
+                      >
+                        View Profile
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 md:flex-none"
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Assign Task
+                      </Button>
+                      <Button size="sm" className="flex-1 md:flex-none">
+                        <ClipboardCheck className="h-4 w-4 mr-2" />
+                        Evaluate
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      </main>
     </div>
   );
-}
+};
+
+export default MyInternsPage;

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Users,
   CheckSquare,
+  ClipboardCheck,
   LogOut,
   Building2,
 } from "lucide-react";
@@ -77,6 +78,11 @@ export function SupervisorSidebar({ onLinkClick }: SupervisorSidebarProps) {
       href: "/dashboard/assignedTasks",
       label: "Assigned Tasks",
       icon: CheckSquare,
+    },
+    {
+      href: "/dashboard/evaluations",
+      label: "Evaluations",
+      icon: ClipboardCheck,
     },
   ];
 

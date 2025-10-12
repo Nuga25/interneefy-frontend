@@ -416,10 +416,10 @@ export default function TasksPage() {
       <div>
         <header className="flex items-center justify-between shadow-sm p-4 bg-white">
           <div>
-            <h1 className="text-4xl font-bold tracking-tight">
+            <h1 className="text-xl font-bold tracking-tight">
               Welcome back, {profile.fullName}!
             </h1>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-md text-muted-foreground">
               Here&apos;s what&apos;s on your plate for today.
             </p>
           </div>
