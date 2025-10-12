@@ -66,6 +66,14 @@ export function AddInternForm({
     setIsSubmitting(true);
     setError("");
 
+    // NEW: Convert dates to YYYY-MM-DD strings for backend
+    const startDateStr = startDate
+      ? startDate.toISOString().split("T")[0]
+      : undefined;
+    const endDateStr = endDate
+      ? endDate.toISOString().split("T")[0]
+      : undefined;
+
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
@@ -80,6 +88,10 @@ export function AddInternForm({
             email,
             role: "INTERN",
             supervisorId: supervisor ? parseInt(supervisor) : null,
+            domain, // FIXED: Now included (full domain string)
+            startDate: startDateStr, // FIXED: Send as string
+            endDate: endDateStr, // FIXED: Send as string
+            // notes, // OPTIONAL: Add if you extend schema/backend to handle it
           }),
         }
       );
@@ -154,21 +166,27 @@ export function AddInternForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="domain">Domain</Label>
+            <Label htmlFor="domain">Domain *</Label>{" "}
+            {/* FIXED: Made required for domain */}
             <Select
               onValueChange={setDomain}
               value={domain}
               disabled={isSubmitting}
+              required
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a domain" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="engineering">
+                {/* FIXED: Changed values to full domain names (matches backend/pie chart) */}
+                <SelectItem value="Software Engineering">
                   Software Engineering
                 </SelectItem>
-                <SelectItem value="design">Product Design</SelectItem>
-                <SelectItem value="marketing">Marketing</SelectItem>
+                <SelectItem value="Product Design">Product Design</SelectItem>
+                <SelectItem value="Marketing">Marketing</SelectItem>
+                <SelectItem value="Data Science">Data Science</SelectItem>
+                <SelectItem value="UX/UI Design">UX/UI Design</SelectItem>
+                {/* Add more domains here */}
               </SelectContent>
             </Select>
           </div>

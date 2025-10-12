@@ -345,9 +345,9 @@ const AdminDashboard = () => {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Interns by Supervisor</CardTitle>
+              <CardTitle>Interns by Domains</CardTitle>
               <CardDescription>
-                Distribution of interns across supervisors.
+                Distribution of interns across domains.
               </CardDescription>
             </CardHeader>
             <CardContent className="h-80">
