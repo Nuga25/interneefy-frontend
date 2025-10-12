@@ -107,7 +107,7 @@ export function SupervisorSidebar({ onLinkClick }: SupervisorSidebarProps) {
           )}
 
           {/* Company Name */}
-          <span className="font-bold text-xl truncate">
+          <span className="font-semibold text-md truncate">
             {company?.name || "Loading..."}
           </span>
         </Link>

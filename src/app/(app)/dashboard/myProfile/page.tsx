@@ -1,113 +1,57 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useAuthStore } from "@/stores/authStore";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   User,
   Mail,
-  Phone,
-  MapPin,
-  GraduationCap,
   Briefcase,
-  Zap,
-  MessageCircle,
   CheckCircle,
   AlertTriangle,
   Calendar,
   Clock,
   UserCheck,
   Globe,
-  BookOpen,
+  AlertCircle as AlertCircleIcon,
 } from "lucide-react";
 import React from "react";
+import { jwtDecode } from "jwt-decode";
 
-// --- Mock Data Structures ---
+// --- Type Definitions ---
+type DecodedToken = {
+  userId: number;
+  companyId: number;
+  role: string;
+  fullName: string;
+};
 
-type InternProfile = {
-  personal: {
+type UserProfile = {
+  id: number;
+  fullName: string;
+  email: string;
+  role: string;
+  domain: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  supervisor: {
+    id: number;
     fullName: string;
     email: string;
-    phone: string;
-    address: string;
-    emergencyContact: string;
-  };
-  academic: {
-    university: string;
-    major: string;
-    gpa: number;
-    yearLevel: string;
-    graduationYear: number;
-  };
-  internship: {
-    domain: string;
-    status: "Active" | "Completed";
-    supervisor: string;
-    supervisorEmail: string;
-    startDate: string;
-    endDate: string;
-    duration: string;
-  };
-  skills: {
-    technicalSkills: string[];
-    areasOfInterest: string[];
-  };
-  evaluation: {
-    status: "Pending" | "Completed";
-    expectedCompletion: string;
-    feedbackText?: string;
-  };
+  } | null;
 };
 
-const mockInternData: InternProfile = {
-  personal: {
-    fullName: "Alex Smith",
-    email: "alexa@company.com",
-    phone: "+1 (555) 567-8901",
-    address: "456 Student Ave, College Town, CA 94110",
-    emergencyContact: "Sarah Smith - Mother - (555) 876-5432",
-  },
-  academic: {
-    university: "University of California, Berkeley",
-    major: "Computer Science",
-    gpa: 3.75,
-    yearLevel: "Junior",
-    graduationYear: 2025,
-  },
-  internship: {
-    domain: "Software Engineering",
-    status: "Active",
-    supervisor: "Mike Chen",
-    supervisorEmail: "mike.chen@company.com",
-    startDate: "1/15/2024",
-    endDate: "4/15/2024",
-    duration: "3 months",
-  },
-  skills: {
-    technicalSkills: [
-      "Javascript",
-      "React",
-      "Node.js",
-      "Python",
-      "Git",
-      "HTML/CSS",
-      "TypeScript",
-      "MongoDB",
-    ],
-    areasOfInterest: [
-      "Web Development",
-      "Machine Learning",
-      "Mobile Apps",
-      "Open Source",
-    ],
-  },
-  evaluation: {
-    status: "Pending",
-    expectedCompletion: "near the end of your internship (around 4/15/24)",
-    // For testing the completed state:
-    // status: 'Completed', feedbackText: "Alex demonstrated exceptional technical aptitude and quickly integrated into the team, consistently exceeding expectations on complex feature development."
-  },
+type Evaluation = {
+  id: number;
+  comments: string | null;
+  technicalScore: number;
+  communicationScore: number;
+  teamworkScore: number;
+  submittedAt: string;
 };
 
-// Helper component for colored section backgrounds
+// --- Helper Components ---
 const ProfileSectionCard: React.FC<{
   title: string;
   icon: React.ReactNode;
@@ -116,9 +60,7 @@ const ProfileSectionCard: React.FC<{
   className?: string;
 }> = ({ title, icon, children, colorClass, className = "" }) => (
   <Card className={`shadow-xl overflow-hidden ${className} border-none`}>
-    {/* Header Band matching the design */}
     <div className={`p-3 text-white ${colorClass} flex items-center`}>
-      {/* Type assertion to allow className on React element */}
       {React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
         className: "w-5 h-5 mr-3",
       })}
@@ -128,7 +70,6 @@ const ProfileSectionCard: React.FC<{
   </Card>
 );
 
-// Helper component for label/value pair based on the new, sparse design
 const DataPoint: React.FC<{
   label: string;
   value: string | number | React.ReactNode;
@@ -143,7 +84,6 @@ const DataPoint: React.FC<{
   isPadded = true,
 }) => (
   <div className={`flex space-x-3 ${isPadded ? "pt-2" : ""}`}>
-    {/* Type assertion to allow className on React element */}
     {React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
       className: "w-4 h-4 text-muted-foreground flex-shrink-0 mt-1",
     })}
@@ -154,245 +94,273 @@ const DataPoint: React.FC<{
   </div>
 );
 
-// --- Individual Section Components (Refactored to match exact design spacing and layout) ---
-
-const PersonalInformation: React.FC<{ data: InternProfile["personal"] }> = ({
-  data,
+// --- Section Components ---
+const PersonalInformation: React.FC<{ profile: UserProfile }> = ({
+  profile,
 }) => (
   <div className="space-y-4 text-sm">
-    {/* Full Name and Icon */}
     <DataPoint
       label="Full Name"
-      value={data.fullName}
+      value={profile.fullName}
       icon={<User />}
       isPadded={false}
     />
-
-    {/* Email */}
-    <DataPoint label="Email Address" value={data.email} icon={<Mail />} />
-
-    {/* Phone */}
-    <DataPoint label="Phone Number" value={data.phone} icon={<Phone />} />
-
-    {/* Address */}
-    <DataPoint label="Address" value={data.address} icon={<MapPin />} />
-
-    {/* Separator and Emergency Contact */}
-    <div className="pt-4 border-t border-red-100">
-      <DataPoint
-        label="Emergency Contact"
-        value={data.emergencyContact}
-        icon={<AlertTriangle className="text-red-500" />}
-        valueClass="text-red-600 font-semibold text-sm"
-        isPadded={false}
-      />
-    </div>
-  </div>
-);
-
-const AcademicInformation: React.FC<{ data: InternProfile["academic"] }> = ({
-  data,
-}) => (
-  <div className="space-y-4 text-sm">
-    {/* University */}
+    <DataPoint label="Email Address" value={profile.email} icon={<Mail />} />
     <DataPoint
-      label="University"
-      value={data.university}
-      icon={<GraduationCap />}
-      isPadded={false}
+      label="Role"
+      value={profile.role}
+      icon={<User />}
+      valueClass="text-primary font-semibold"
     />
-
-    {/* Major */}
-    <DataPoint label="Major" value={data.major} icon={<BookOpen />} />
-
-    {/* GPA and Graduation Year - Placed side-by-side in the design */}
-    <div className="flex items-end justify-between w-full pt-4">
-      <div className="flex space-x-3">
-        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-1" />
-        <div className="flex flex-col">
-          <span className="text-xs font-light text-muted-foreground">GPA</span>
-          <span className="font-bold text-lg text-green-600">
-            {data.gpa.toFixed(2)}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex space-x-3">
-        <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
-        <div className="flex flex-col text-right">
-          <span className="text-xs font-light text-muted-foreground">
-            Graduation
-          </span>
-          <span className="font-medium text-lg">{data.graduationYear}</span>
-        </div>
-      </div>
-    </div>
-
-    {/* Year Level - Placed below GPA/Grad Year in the design */}
-    <div className="pt-4">
-      <DataPoint
-        label="Year Level"
-        value={data.yearLevel}
-        icon={<User />}
-        isPadded={false}
-      />
-    </div>
   </div>
 );
 
-const InternshipDetails: React.FC<{ data: InternProfile["internship"] }> = ({
-  data,
-}) => (
-  <div className="space-y-4 text-sm">
-    {/* Domain and Status */}
-    <div className="flex justify-between items-start pt-1">
-      <DataPoint
-        label="Domain"
-        value={data.domain}
-        icon={<Briefcase />}
-        isPadded={false}
-      />
-      <span
-        className={`px-3 py-1 text-xs font-semibold rounded-full ${
-          data.status === "Active"
-            ? "bg-green-100 text-green-700"
-            : "bg-gray-100 text-gray-700"
-        }`}
-      >
-        {data.status}
-      </span>
-    </div>
+const InternshipDetails: React.FC<{ profile: UserProfile }> = ({ profile }) => {
+  const calculateDuration = () => {
+    if (!profile.startDate || !profile.endDate) return "Not specified";
+    const start = new Date(profile.startDate);
+    const end = new Date(profile.endDate);
+    const months = Math.round(
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30)
+    );
+    return `${months} month${months !== 1 ? "s" : ""}`;
+  };
 
-    {/* Supervisor Details */}
-    <DataPoint
-      label="Supervisor"
-      value={
-        <span className="flex flex-col">
-          {data.supervisor}
-          <span className="text-blue-500 text-xs font-normal">
-            {data.supervisorEmail}
-          </span>
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Not set";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const isActive = () => {
+    if (!profile.endDate) return true;
+    return new Date(profile.endDate) > new Date();
+  };
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex justify-between items-start pt-1">
+        <DataPoint
+          label="Domain"
+          value={profile.domain || "General"}
+          icon={<Briefcase />}
+          isPadded={false}
+        />
+        <span
+          className={`px-3 py-1 text-xs font-semibold rounded-full ${
+            isActive()
+              ? "bg-green-100 text-green-700"
+              : "bg-gray-100 text-gray-700"
+          }`}
+        >
+          {isActive() ? "Active" : "Completed"}
         </span>
-      }
-      icon={<UserCheck />}
-    />
+      </div>
 
-    {/* Start Date / End Date - Placed side-by-side in the design */}
-    <div className="flex justify-start space-x-12 pt-4">
-      <DataPoint
-        label="Start Date"
-        value={data.startDate}
-        icon={<Calendar />}
-        isPadded={false}
-      />
-      {/* The end date/duration is typically further down in the design, adjusting for layout */}
-    </div>
+      {profile.supervisor && (
+        <DataPoint
+          label="Supervisor"
+          value={
+            <span className="flex flex-col">
+              {profile.supervisor.fullName}
+              <span className="text-blue-500 text-xs font-normal">
+                {profile.supervisor.email}
+              </span>
+            </span>
+          }
+          icon={<UserCheck />}
+        />
+      )}
 
-    {/* Duration / End Date */}
-    <div className="flex justify-start space-x-12 pt-4">
-      <DataPoint
-        label="Duration"
-        value={data.duration}
-        icon={<Clock />}
-        isPadded={false}
-      />
-      <DataPoint
-        label="End Date"
-        value={data.endDate}
-        icon={<Calendar />}
-        isPadded={false}
-      />
-    </div>
-  </div>
-);
+      <div className="flex justify-start space-x-12 pt-4">
+        <DataPoint
+          label="Start Date"
+          value={formatDate(profile.startDate)}
+          icon={<Calendar />}
+          isPadded={false}
+        />
+      </div>
 
-const SkillsAndInterests: React.FC<{ data: InternProfile["skills"] }> = ({
-  data,
-}) => (
-  <div className="space-y-6 text-sm">
-    <div className="space-y-3">
-      <h3 className="font-semibold text-base flex items-center">
-        <Zap className="w-4 h-4 mr-2 text-orange-600" /> Technical Skills
-      </h3>
-      <div className="flex flex-wrap gap-2">
-        {data.technicalSkills.map((skill) => (
-          <span
-            key={skill}
-            className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700 border border-blue-200"
-          >
-            {skill}
-          </span>
-        ))}
+      <div className="flex justify-start space-x-12 pt-4">
+        <DataPoint
+          label="Duration"
+          value={calculateDuration()}
+          icon={<Clock />}
+          isPadded={false}
+        />
+        <DataPoint
+          label="End Date"
+          value={formatDate(profile.endDate)}
+          icon={<Calendar />}
+          isPadded={false}
+        />
       </div>
     </div>
+  );
+};
 
-    <div className="pt-4 border-t space-y-3">
-      <h3 className="font-semibold text-base flex items-center">
-        <Globe className="w-4 h-4 mr-2 text-orange-600" /> Areas of Interest
-      </h3>
-      <div className="flex flex-wrap gap-2">
-        {data.areasOfInterest.map((interest) => (
-          <span
-            key={interest}
-            className="px-3 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-200"
-          >
-            {interest}
-          </span>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-const FinalEvaluation: React.FC<{ data: InternProfile["evaluation"] }> = ({
-  data,
+const FinalEvaluation: React.FC<{ evaluation: Evaluation | null }> = ({
+  evaluation,
 }) => {
-  const isPending = data.status === "Pending";
+  if (!evaluation) {
+    return (
+      <div className="text-center p-8 space-y-6">
+        <div className="flex justify-center items-center">
+          <AlertTriangle className="w-16 h-16 text-yellow-500" />
+        </div>
+        <h2 className="text-xl font-bold">Evaluation Pending</h2>
+        <p className="text-muted-foreground max-w-lg mx-auto">
+          Your final evaluation is not yet ready. Your supervisor will complete
+          the evaluation near the end of your internship period.
+        </p>
+      </div>
+    );
+  }
+
+  const avgScore =
+    (evaluation.technicalScore +
+      evaluation.communicationScore +
+      evaluation.teamworkScore) /
+    3;
 
   return (
     <div className="text-center p-8 space-y-6">
       <div className="flex justify-center items-center">
-        {isPending ? (
-          <AlertTriangle className="w-16 h-16 text-yellow-500" />
-        ) : (
-          <CheckCircle className="w-16 h-16 text-green-500" />
-        )}
+        <CheckCircle className="w-16 h-16 text-green-500" />
       </div>
 
-      <h2 className="text-xl font-bold">
-        {isPending ? "Evaluation Pending" : "Evaluation Complete"}
-      </h2>
+      <h2 className="text-xl font-bold">Evaluation Complete</h2>
 
-      {isPending ? (
-        <>
-          <p className="text-muted-foreground max-w-lg mx-auto">
-            Your final evaluation is not yet ready. Your supervisor will
-            complete the evaluation near the end of your internship period.
+      <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+        <div className="text-center">
+          <p className="text-2xl font-bold text-blue-600">
+            {evaluation.technicalScore}
           </p>
-          <p className="text-sm font-medium text-green-600">
-            Expected completion:{" "}
-            <span className="underline">{data.expectedCompletion}</span>
+          <p className="text-xs text-muted-foreground">Technical</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold text-purple-600">
+            {evaluation.communicationScore}
           </p>
-        </>
-      ) : (
-        <div className="text-left bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <p className="text-xs text-muted-foreground">Communication</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold text-green-600">
+            {evaluation.teamworkScore}
+          </p>
+          <p className="text-xs text-muted-foreground">Teamwork</p>
+        </div>
+      </div>
+
+      <div className="text-center">
+        <p className="text-3xl font-bold text-primary">{avgScore.toFixed(1)}</p>
+        <p className="text-sm text-muted-foreground">Overall Score</p>
+      </div>
+
+      {evaluation.comments && (
+        <div className="text-left bg-gray-50 p-4 rounded-lg border border-gray-200 max-w-lg mx-auto">
           <p className="italic text-gray-700">
-            &quot;{data.feedbackText}&quot;
+            &quot;{evaluation.comments}&quot;
           </p>
           <p className="mt-2 text-sm font-semibold text-right text-green-600">
             - Supervisor
           </p>
         </div>
       )}
+
+      <p className="text-xs text-muted-foreground">
+        Completed on{" "}
+        {new Date(evaluation.submittedAt).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}
+      </p>
     </div>
   );
 };
 
 // --- Main Page Component ---
-
 export default function ProfileAndFeedbackPage() {
-  // In a real app, this would fetch data based on the authenticated user ID
-  const data = mockInternData;
+  const token = useAuthStore((state) => state.token);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!token) return;
+
+      try {
+        const decoded = jwtDecode<DecodedToken>(token);
+        const userId = decoded.userId;
+
+        // Fetch user profile
+        const profileResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/users/${userId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setProfile(profileData);
+        } else {
+          setError("Failed to load profile data");
+        }
+
+        // Fetch evaluation (if exists)
+        try {
+          const evalResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/evaluations/me`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (evalResponse.ok) {
+            const evalData = await evalResponse.json();
+            setEvaluation(evalData);
+          }
+          // If 404, evaluation doesn't exist yet - that's ok
+        } catch (err) {
+          console.log("No evaluation found yet");
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setError("An error occurred while loading your profile");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfileData();
+  }, [token]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-lg">Loading your profile...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <Alert variant="destructive">
+          <AlertCircleIcon className="h-4 w-4" />
+          <AlertDescription>
+            {error || "Failed to load profile data"}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -405,53 +373,31 @@ export default function ProfileAndFeedbackPage() {
         </p>
       </div>
 
-      {/* Grid for top two rows (2x2 layout) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 1. Personal Information (Blue Header) */}
         <ProfileSectionCard
           title="Personal Information"
           icon={<User />}
-          colorClass="bg-blue-600"
+          colorClass="bg-blue-500"
         >
-          <PersonalInformation data={data.personal} />
+          <PersonalInformation profile={profile} />
         </ProfileSectionCard>
 
-        {/* 2. Academic Information (Purple Header) */}
-        <ProfileSectionCard
-          title="Academic Information"
-          icon={<GraduationCap />}
-          colorClass="bg-purple-600"
-        >
-          <AcademicInformation data={data.academic} />
-        </ProfileSectionCard>
-
-        {/* 3. Internship Details (Green Header) */}
         <ProfileSectionCard
           title="Internship Details"
           icon={<Briefcase />}
-          colorClass="bg-green-600"
+          colorClass="bg-green-500"
         >
-          <InternshipDetails data={data.internship} />
-        </ProfileSectionCard>
-
-        {/* 4. Skills & Interests (Orange Header) */}
-        <ProfileSectionCard
-          title="Skills & Interests"
-          icon={<Zap />}
-          colorClass="bg-orange-600"
-        >
-          <SkillsAndInterests data={data.skills} />
+          <InternshipDetails profile={profile} />
         </ProfileSectionCard>
       </div>
 
-      {/* Final Evaluation & Feedback (Red Header - Full Width) */}
       <ProfileSectionCard
         title="Final Evaluation & Feedback"
-        icon={<MessageCircle />}
-        colorClass="bg-red-600"
+        icon={<Globe />}
+        colorClass="bg-purple-500"
         className="mt-6"
       >
-        <FinalEvaluation data={data.evaluation} />
+        <FinalEvaluation evaluation={evaluation} />
       </ProfileSectionCard>
     </div>
   );

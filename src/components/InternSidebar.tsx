@@ -103,7 +103,7 @@ export function InternSidebar({ onLinkClick }: InternSidebarProps) {
           )}
 
           {/* Company Name */}
-          <span className="font-bold text-xl truncate">
+          <span className="font-semibold text-md truncate">
             {company?.name || "Loading..."}
           </span>
         </Link>
@@ -136,17 +136,6 @@ export function InternSidebar({ onLinkClick }: InternSidebarProps) {
           <LogOut className="h-5 w-5" />
           <span>Logout</span>
         </Button>
-      </div>
-      <div className="mt-auto pt-4 border-t border-muted/20">
-        <div className="flex items-center gap-3">
-          <div className="relative h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
-            SJ
-          </div>
-          <div>
-            <p className="font-semibold text-white">Sarah Johnson</p>
-            <p className="text-xs text-muted-foreground">Intern</p>
-          </div>
-        </div>
       </div>
     </>
   );
