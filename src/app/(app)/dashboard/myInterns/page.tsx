@@ -2,8 +2,9 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { userApi, taskApi, User, Task } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -28,15 +29,10 @@ import {
   Mail,
   Calendar,
   TrendingUp,
+  AlertCircle,
 } from "lucide-react";
 
-type Intern = {
-  id: number;
-  fullName: string;
-  email: string;
-  domain: string;
-  startDate: string;
-  endDate: string;
+type InternWithStats = User & {
   status: "Active" | "Completed";
   progress: number;
   activeTasks: number;
@@ -50,87 +46,105 @@ const getInitials = (fullName: string) => {
   return `${firstInitial}${lastInitial}`;
 };
 
+// Helper to decode JWT
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
+};
+
 const MyInternsPage = () => {
   const token = useAuthStore((state) => state.token);
 
-  const [interns, setInterns] = useState<Intern[]>([]);
-  const [filteredInterns, setFilteredInterns] = useState<Intern[]>([]);
+  const [interns, setInterns] = useState<InternWithStats[]>([]);
+  const [filteredInterns, setFilteredInterns] = useState<InternWithStats[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - replace with API call
-  useEffect(() => {
-    if (token) {
-      const mockInterns: Intern[] = [
-        {
-          id: 1,
-          fullName: "John Doe",
-          email: "john@example.com",
-          domain: "Software Development",
-          startDate: "2025-01-15",
-          endDate: "2025-06-15",
-          status: "Active",
-          progress: 65,
-          activeTasks: 3,
-          completedTasks: 7,
-        },
-        {
-          id: 2,
-          fullName: "Jane Smith",
-          email: "jane@example.com",
-          domain: "UI/UX Design",
-          startDate: "2025-02-01",
-          endDate: "2025-07-01",
-          status: "Active",
-          progress: 45,
-          activeTasks: 2,
-          completedTasks: 4,
-        },
-        {
-          id: 3,
-          fullName: "Mike Johnson",
-          email: "mike@example.com",
-          domain: "Data Analytics",
-          startDate: "2025-01-20",
-          endDate: "2025-06-20",
-          status: "Active",
-          progress: 80,
-          activeTasks: 1,
-          completedTasks: 12,
-        },
-        {
-          id: 4,
-          fullName: "Sarah Williams",
-          email: "sarah@example.com",
-          domain: "Software Development",
-          startDate: "2024-09-01",
-          endDate: "2025-02-01",
-          status: "Completed",
-          progress: 100,
-          activeTasks: 0,
-          completedTasks: 15,
-        },
-        {
-          id: 5,
-          fullName: "David Brown",
-          email: "david@example.com",
-          domain: "Marketing",
-          startDate: "2025-01-10",
-          endDate: "2025-06-10",
-          status: "Active",
-          progress: 30,
-          activeTasks: 4,
-          completedTasks: 2,
-        },
-      ];
+  // Fetch interns data from backend
+  const fetchInterns = useCallback(async () => {
+    if (!token) return;
 
-      setInterns(mockInterns);
-      setFilteredInterns(mockInterns);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Get supervisor ID from token
+      const tokenPayload = decodeJwt(token);
+      const supervisorId = tokenPayload?.userId;
+
+      // Fetch all users and tasks in parallel
+      const [allUsers, allTasks] = await Promise.all([
+        userApi.getAll(),
+        taskApi.getSupervisionTasks(),
+      ]);
+
+      // Filter for interns supervised by this supervisor
+      const supervisedInterns = allUsers.filter(
+        (user) => user.role === "INTERN" && user.supervisorId === supervisorId
+      );
+
+      // Calculate stats for each intern
+      const internsWithStats: InternWithStats[] = supervisedInterns.map(
+        (intern) => {
+          const internTasks = allTasks.filter(
+            (task) => task.internId === intern.id
+          );
+          const completedTasks = internTasks.filter(
+            (task) => task.status === "COMPLETED"
+          ).length;
+          const activeTasks = internTasks.filter(
+            (task) => task.status !== "COMPLETED"
+          ).length;
+          const progress =
+            internTasks.length > 0
+              ? Math.round((completedTasks / internTasks.length) * 100)
+              : 0;
+
+          // Determine status based on end date
+          const now = new Date();
+          const endDate = intern.endDate ? new Date(intern.endDate) : null;
+          const status = endDate && endDate < now ? "Completed" : "Active";
+
+          return {
+            ...intern,
+            status,
+            progress,
+            activeTasks,
+            completedTasks,
+          };
+        }
+      );
+
+      setInterns(internsWithStats);
+      setFilteredInterns(internsWithStats);
+    } catch (err) {
+      console.error("Error fetching interns:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load interns data"
+      );
+    } finally {
       setIsLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    fetchInterns();
+  }, [fetchInterns]);
 
   // Filter interns based on search and filters
   useEffect(() => {
@@ -153,7 +167,30 @@ const MyInternsPage = () => {
     setFilteredInterns(filtered);
   }, [searchTerm, domainFilter, statusFilter, interns]);
 
-  const domains = Array.from(new Set(interns.map((intern) => intern.domain)));
+  // Get unique domains from interns
+  const domains = Array.from(
+    new Set(interns.map((intern) => intern.domain).filter(Boolean))
+  ) as string[];
+
+  // Error state
+  if (error) {
+    return (
+      <div className="p-4">
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p className="font-medium">Error loading interns</p>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">{error}</p>
+            <Button onClick={fetchInterns} className="mt-4" size="sm">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -218,7 +255,9 @@ const MyInternsPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{interns.length}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? "..." : interns.length}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -229,7 +268,9 @@ const MyInternsPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {interns.filter((i) => i.status === "Active").length}
+                {isLoading
+                  ? "..."
+                  : interns.filter((i) => i.status === "Active").length}
               </div>
             </CardContent>
           </Card>
@@ -241,7 +282,9 @@ const MyInternsPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {interns.filter((i) => i.status === "Completed").length}
+                {isLoading
+                  ? "..."
+                  : interns.filter((i) => i.status === "Completed").length}
               </div>
             </CardContent>
           </Card>
@@ -249,10 +292,23 @@ const MyInternsPage = () => {
 
         {/* Interns List */}
         <div className="space-y-4">
-          {filteredInterns.length === 0 ? (
+          {isLoading ? (
+            // Loading skeleton
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="pt-6">
+                    <div className="h-32 bg-muted animate-pulse rounded" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredInterns.length === 0 ? (
             <Card>
-              <CardContent className="pt-6 text-center text-muted-foreground">
-                No interns found matching your filters.
+              <CardContent className="pt-6 text-center text-muted-foreground py-12">
+                {interns.length === 0
+                  ? "No interns assigned to you yet."
+                  : "No interns found matching your filters."}
               </CardContent>
             </Card>
           ) : (
@@ -289,7 +345,7 @@ const MyInternsPage = () => {
                           </div>
                           <div className="flex items-center gap-1">
                             <TrendingUp className="h-4 w-4" />
-                            <span>{intern.domain}</span>
+                            <span>{intern.domain || "Not specified"}</span>
                           </div>
                         </div>
 
@@ -300,7 +356,11 @@ const MyInternsPage = () => {
                             </p>
                             <p className="text-sm font-medium flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {new Date(intern.startDate).toLocaleDateString()}
+                              {intern.startDate
+                                ? new Date(
+                                    intern.startDate
+                                  ).toLocaleDateString()
+                                : "N/A"}
                             </p>
                           </div>
                           <div>
@@ -309,7 +369,9 @@ const MyInternsPage = () => {
                             </p>
                             <p className="text-sm font-medium flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {new Date(intern.endDate).toLocaleDateString()}
+                              {intern.endDate
+                                ? new Date(intern.endDate).toLocaleDateString()
+                                : "N/A"}
                             </p>
                           </div>
                           <div>

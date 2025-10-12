@@ -1,7 +1,10 @@
+// app/(app)/dashboard/evaluations/page.tsx
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { userApi, evaluationApi, User } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -10,7 +13,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -32,127 +34,105 @@ import {
 import { Slider } from "@/components/ui/slider";
 import {
   Plus,
-  Star,
   Calendar,
-  User,
   Filter,
-  TrendingUp,
   MessageSquare,
+  AlertCircle,
 } from "lucide-react";
 
-type Intern = {
-  id: number;
-  fullName: string;
-  email: string;
-  domain: string;
-};
-
-type Evaluation = {
+type EvaluationWithIntern = {
   id: number;
   internId: number;
   internName: string;
-  technicalSkills: number;
-  communication: number;
-  teamwork: number;
+  technicalScore: number;
+  communicationScore: number;
+  teamworkScore: number;
   overallScore: number;
-  comments: string;
-  evaluatedAt: string;
+  comments: string | null;
+  submittedAt: string;
+};
+
+// Helper to decode JWT
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
 };
 
 const EvaluationsPage = () => {
   const token = useAuthStore((state) => state.token);
 
-  const [interns, setInterns] = useState<Intern[]>([]);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [filteredEvaluations, setFilteredEvaluations] = useState<Evaluation[]>(
-    []
-  );
+  const [interns, setInterns] = useState<User[]>([]);
+  const [evaluations, setEvaluations] = useState<EvaluationWithIntern[]>([]);
+  const [filteredEvaluations, setFilteredEvaluations] = useState<
+    EvaluationWithIntern[]
+  >([]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [internFilter, setInternFilter] = useState<string>("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     internId: "",
-    technicalSkills: 5,
-    communication: 5,
-    teamwork: 5,
+    technicalScore: 5,
+    communicationScore: 5,
+    teamworkScore: 5,
     comments: "",
   });
 
-  // Mock data - replace with API call
-  useEffect(() => {
-    if (token) {
-      const mockInterns: Intern[] = [
-        {
-          id: 1,
-          fullName: "John Doe",
-          email: "john@example.com",
-          domain: "Software Development",
-        },
-        {
-          id: 2,
-          fullName: "Jane Smith",
-          email: "jane@example.com",
-          domain: "UI/UX Design",
-        },
-        {
-          id: 3,
-          fullName: "Mike Johnson",
-          email: "mike@example.com",
-          domain: "Data Analytics",
-        },
-        {
-          id: 4,
-          fullName: "Sarah Williams",
-          email: "sarah@example.com",
-          domain: "Software Development",
-        },
-      ];
+  // Fetch data from backend
+  const fetchData = useCallback(async () => {
+    if (!token) return;
 
-      const mockEvaluations: Evaluation[] = [
-        {
-          id: 1,
-          internId: 1,
-          internName: "John Doe",
-          technicalSkills: 8,
-          communication: 9,
-          teamwork: 8,
-          overallScore: 8.3,
-          comments:
-            "Excellent progress on API integration. Shows strong problem-solving skills and good communication with the team.",
-          evaluatedAt: "2025-09-15",
-        },
-        {
-          id: 2,
-          internId: 2,
-          internName: "Jane Smith",
-          technicalSkills: 9,
-          communication: 8,
-          teamwork: 9,
-          overallScore: 8.7,
-          comments:
-            "Outstanding design work. Very creative and receptive to feedback. Great collaboration with developers.",
-          evaluatedAt: "2025-09-20",
-        },
-        {
-          id: 3,
-          internId: 3,
-          internName: "Mike Johnson",
-          technicalSkills: 7,
-          communication: 7,
-          teamwork: 8,
-          overallScore: 7.3,
-          comments:
-            "Good analytical skills. Could improve on presentation skills but overall solid performance.",
-          evaluatedAt: "2025-09-18",
-        },
-      ];
+    setIsLoading(true);
+    setError(null);
 
-      setInterns(mockInterns);
-      setEvaluations(mockEvaluations);
-      setFilteredEvaluations(mockEvaluations);
+    try {
+      // Get supervisor ID from token
+      const tokenPayload = decodeJwt(token);
+      const supervisorId = tokenPayload?.userId;
+
+      // Fetch all users
+      const allUsers = await userApi.getAll();
+
+      // Filter for interns supervised by this supervisor
+      const supervisedInterns = allUsers.filter(
+        (user) => user.role === "INTERN" && user.supervisorId === supervisorId
+      );
+
+      setInterns(supervisedInterns);
+
+      // Note: Your backend doesn't have an endpoint to get all evaluations
+      // You'll need to add this endpoint or fetch individually per intern
+      // For now, we'll set empty array - see note below
+      setEvaluations([]);
+      setFilteredEvaluations([]);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load evaluations data"
+      );
+    } finally {
+      setIsLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Filter evaluations
   useEffect(() => {
@@ -167,36 +147,63 @@ const EvaluationsPage = () => {
     }
   }, [internFilter, evaluations]);
 
-  const handleSubmitEvaluation = () => {
-    const overallScore =
-      (formData.technicalSkills + formData.communication + formData.teamwork) /
-      3;
+  const handleSubmitEvaluation = async () => {
+    if (!formData.internId || !formData.comments.trim()) {
+      alert("Please select an intern and provide comments.");
+      return;
+    }
 
-    const newEvaluation: Evaluation = {
-      id: evaluations.length + 1,
-      internId: parseInt(formData.internId),
-      internName:
-        interns.find((i) => i.id === parseInt(formData.internId))?.fullName ||
-        "",
-      technicalSkills: formData.technicalSkills,
-      communication: formData.communication,
-      teamwork: formData.teamwork,
-      overallScore: Math.round(overallScore * 10) / 10,
-      comments: formData.comments,
-      evaluatedAt: new Date().toISOString().split("T")[0],
-    };
+    setIsSubmitting(true);
 
-    setEvaluations([newEvaluation, ...evaluations]);
-    setIsDialogOpen(false);
-    resetForm();
+    try {
+      await evaluationApi.submit({
+        internId: parseInt(formData.internId),
+        technicalScore: formData.technicalScore,
+        communicationScore: formData.communicationScore,
+        teamworkScore: formData.teamworkScore,
+        comments: formData.comments,
+      });
+
+      // Create a local evaluation object for display
+      const overallScore =
+        (formData.technicalScore +
+          formData.communicationScore +
+          formData.teamworkScore) /
+        3;
+
+      const newEvaluation: EvaluationWithIntern = {
+        id: evaluations.length + 1,
+        internId: parseInt(formData.internId),
+        internName:
+          interns.find((i) => i.id === parseInt(formData.internId))?.fullName ||
+          "",
+        technicalScore: formData.technicalScore,
+        communicationScore: formData.communicationScore,
+        teamworkScore: formData.teamworkScore,
+        overallScore: Math.round(overallScore * 10) / 10,
+        comments: formData.comments,
+        submittedAt: new Date().toISOString(),
+      };
+
+      setEvaluations([newEvaluation, ...evaluations]);
+      setIsDialogOpen(false);
+      resetForm();
+
+      alert("Evaluation submitted successfully!");
+    } catch (err) {
+      console.error("Error submitting evaluation:", err);
+      alert("Failed to submit evaluation. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
     setFormData({
       internId: "",
-      technicalSkills: 5,
-      communication: 5,
-      teamwork: 5,
+      technicalScore: 5,
+      communicationScore: 5,
+      teamworkScore: 5,
       comments: "",
     });
   };
@@ -213,13 +220,13 @@ const EvaluationsPage = () => {
     return "bg-red-100";
   };
 
-  // Get interns that haven't been evaluated recently (mock logic)
+  // Get interns that haven't been evaluated recently
   const internsForEvaluation = interns.filter(
     (intern) =>
       !evaluations.some(
         (evaluation) =>
           evaluation.internId === intern.id &&
-          new Date(evaluation.evaluatedAt).getTime() >
+          new Date(evaluation.submittedAt).getTime() >
             Date.now() - 30 * 24 * 60 * 60 * 1000 // 30 days
       )
   );
@@ -228,7 +235,7 @@ const EvaluationsPage = () => {
     technical:
       evaluations.length > 0
         ? Math.round(
-            (evaluations.reduce((acc, e) => acc + e.technicalSkills, 0) /
+            (evaluations.reduce((acc, e) => acc + e.technicalScore, 0) /
               evaluations.length) *
               10
           ) / 10
@@ -236,7 +243,7 @@ const EvaluationsPage = () => {
     communication:
       evaluations.length > 0
         ? Math.round(
-            (evaluations.reduce((acc, e) => acc + e.communication, 0) /
+            (evaluations.reduce((acc, e) => acc + e.communicationScore, 0) /
               evaluations.length) *
               10
           ) / 10
@@ -244,12 +251,32 @@ const EvaluationsPage = () => {
     teamwork:
       evaluations.length > 0
         ? Math.round(
-            (evaluations.reduce((acc, e) => acc + e.teamwork, 0) /
+            (evaluations.reduce((acc, e) => acc + e.teamworkScore, 0) /
               evaluations.length) *
               10
           ) / 10
         : 0,
   };
+
+  // Error state
+  if (error && !isLoading) {
+    return (
+      <div className="p-4">
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p className="font-medium">Error loading evaluations</p>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">{error}</p>
+            <Button onClick={fetchData} className="mt-4" size="sm">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -279,7 +306,9 @@ const EvaluationsPage = () => {
 
               <div className="space-y-6 py-4">
                 <div>
-                  <Label htmlFor="intern">Select Intern</Label>
+                  <Label htmlFor="intern">
+                    Select Intern <span className="text-red-500">*</span>
+                  </Label>
                   <Select
                     value={formData.internId}
                     onValueChange={(value) =>
@@ -295,7 +324,8 @@ const EvaluationsPage = () => {
                           key={intern.id}
                           value={intern.id.toString()}
                         >
-                          {intern.fullName} - {intern.domain}
+                          {intern.fullName}
+                          {intern.domain && ` - ${intern.domain}`}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -307,7 +337,7 @@ const EvaluationsPage = () => {
                     <div className="flex items-center justify-between mb-2">
                       <Label htmlFor="technical">Technical Skills</Label>
                       <span className="text-2xl font-bold text-primary">
-                        {formData.technicalSkills}
+                        {formData.technicalScore}
                       </span>
                     </div>
                     <Slider
@@ -315,9 +345,9 @@ const EvaluationsPage = () => {
                       min={1}
                       max={10}
                       step={1}
-                      value={[formData.technicalSkills]}
+                      value={[formData.technicalScore]}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, technicalSkills: value[0] })
+                        setFormData({ ...formData, technicalScore: value[0] })
                       }
                       className="w-full"
                     />
@@ -331,7 +361,7 @@ const EvaluationsPage = () => {
                     <div className="flex items-center justify-between mb-2">
                       <Label htmlFor="communication">Communication</Label>
                       <span className="text-2xl font-bold text-primary">
-                        {formData.communication}
+                        {formData.communicationScore}
                       </span>
                     </div>
                     <Slider
@@ -339,9 +369,12 @@ const EvaluationsPage = () => {
                       min={1}
                       max={10}
                       step={1}
-                      value={[formData.communication]}
+                      value={[formData.communicationScore]}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, communication: value[0] })
+                        setFormData({
+                          ...formData,
+                          communicationScore: value[0],
+                        })
                       }
                       className="w-full"
                     />
@@ -355,7 +388,7 @@ const EvaluationsPage = () => {
                     <div className="flex items-center justify-between mb-2">
                       <Label htmlFor="teamwork">Teamwork</Label>
                       <span className="text-2xl font-bold text-primary">
-                        {formData.teamwork}
+                        {formData.teamworkScore}
                       </span>
                     </div>
                     <Slider
@@ -363,9 +396,9 @@ const EvaluationsPage = () => {
                       min={1}
                       max={10}
                       step={1}
-                      value={[formData.teamwork]}
+                      value={[formData.teamworkScore]}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, teamwork: value[0] })
+                        setFormData({ ...formData, teamworkScore: value[0] })
                       }
                       className="w-full"
                     />
@@ -380,9 +413,9 @@ const EvaluationsPage = () => {
                       <Label className="text-base">Overall Score</Label>
                       <span className="text-3xl font-bold text-primary">
                         {(
-                          (formData.technicalSkills +
-                            formData.communication +
-                            formData.teamwork) /
+                          (formData.technicalScore +
+                            formData.communicationScore +
+                            formData.teamworkScore) /
                           3
                         ).toFixed(1)}
                         /10
@@ -392,7 +425,9 @@ const EvaluationsPage = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="comments">Comments & Feedback</Label>
+                  <Label htmlFor="comments">
+                    Comments & Feedback <span className="text-red-500">*</span>
+                  </Label>
                   <Textarea
                     id="comments"
                     value={formData.comments}
@@ -409,15 +444,23 @@ const EvaluationsPage = () => {
               <DialogFooter>
                 <Button
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+                  onClick={() => {
+                    setIsDialogOpen(false);
+                    resetForm();
+                  }}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleSubmitEvaluation}
-                  disabled={!formData.internId || !formData.comments}
+                  disabled={
+                    !formData.internId ||
+                    !formData.comments.trim() ||
+                    isSubmitting
+                  }
                 >
-                  Submit Evaluation
+                  {isSubmitting ? "Submitting..." : "Submit Evaluation"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -435,7 +478,9 @@ const EvaluationsPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{evaluations.length}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? "..." : evaluations.length}
+              </div>
             </CardContent>
           </Card>
 
@@ -451,7 +496,7 @@ const EvaluationsPage = () => {
                   averageScores.technical
                 )}`}
               >
-                {averageScores.technical}/10
+                {isLoading ? "..." : `${averageScores.technical}/10`}
               </div>
             </CardContent>
           </Card>
@@ -468,7 +513,7 @@ const EvaluationsPage = () => {
                   averageScores.communication
                 )}`}
               >
-                {averageScores.communication}/10
+                {isLoading ? "..." : `${averageScores.communication}/10`}
               </div>
             </CardContent>
           </Card>
@@ -485,14 +530,14 @@ const EvaluationsPage = () => {
                   averageScores.teamwork
                 )}`}
               >
-                {averageScores.teamwork}/10
+                {isLoading ? "..." : `${averageScores.teamwork}/10`}
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Interns Ready for Evaluation */}
-        {internsForEvaluation.length > 0 && (
+        {!isLoading && internsForEvaluation.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Interns Ready for Evaluation</CardTitle>
@@ -517,7 +562,7 @@ const EvaluationsPage = () => {
                       <div>
                         <p className="font-medium">{intern.fullName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {intern.domain}
+                          {intern.domain || "No domain specified"}
                         </p>
                       </div>
                     </div>
@@ -571,10 +616,23 @@ const EvaluationsPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {filteredEvaluations.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No evaluations found. Submit your first evaluation to get
-                started!
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-48 bg-muted animate-pulse rounded"
+                  />
+                ))}
+              </div>
+            ) : filteredEvaluations.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p className="text-lg mb-2">No evaluations found</p>
+                <p className="text-sm">
+                  {evaluations.length === 0
+                    ? "Submit your first evaluation to get started!"
+                    : "No evaluations match your selected filter."}
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -599,7 +657,7 @@ const EvaluationsPage = () => {
                                 <span>
                                   Evaluated on{" "}
                                   {new Date(
-                                    evaluation.evaluatedAt
+                                    evaluation.submittedAt
                                   ).toLocaleDateString()}
                                 </span>
                               </div>
@@ -627,7 +685,7 @@ const EvaluationsPage = () => {
                           <div className="grid grid-cols-3 gap-4 mb-4">
                             <div className="text-center p-3 bg-muted rounded-lg">
                               <div className="text-lg font-bold">
-                                {evaluation.technicalSkills}/10
+                                {evaluation.technicalScore}/10
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 Technical
@@ -635,7 +693,7 @@ const EvaluationsPage = () => {
                             </div>
                             <div className="text-center p-3 bg-muted rounded-lg">
                               <div className="text-lg font-bold">
-                                {evaluation.communication}/10
+                                {evaluation.communicationScore}/10
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 Communication
@@ -643,7 +701,7 @@ const EvaluationsPage = () => {
                             </div>
                             <div className="text-center p-3 bg-muted rounded-lg">
                               <div className="text-lg font-bold">
-                                {evaluation.teamwork}/10
+                                {evaluation.teamworkScore}/10
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 Teamwork
@@ -651,17 +709,19 @@ const EvaluationsPage = () => {
                             </div>
                           </div>
 
-                          <div className="bg-muted/50 p-4 rounded-lg">
-                            <div className="flex items-center gap-2 mb-2">
-                              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm font-medium">
-                                Feedback & Comments
-                              </span>
+                          {evaluation.comments && (
+                            <div className="bg-muted/50 p-4 rounded-lg">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">
+                                  Feedback & Comments
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {evaluation.comments}
+                              </p>
                             </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {evaluation.comments}
-                            </p>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>

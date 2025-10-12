@@ -2,8 +2,9 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { userApi, taskApi, Task, User } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,25 +33,27 @@ import {
   Edit,
   Trash2,
   Calendar,
-  User,
+  User as UserIcon,
   AlertCircle,
 } from "lucide-react";
+// import { useToast } from "@/components/ui/use-toast"; // Commented out for now
 
-type Task = {
-  id: number;
-  title: string;
-  description: string;
-  internId: number;
-  internName: string;
-  status: "TODO" | "IN_PROGRESS" | "REVIEW" | "COMPLETED";
-  priority: "LOW" | "MEDIUM" | "HIGH";
-  dueDate: string;
-  createdAt: string;
-};
-
-type Intern = {
-  id: number;
-  fullName: string;
+// Helper to decode JWT
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
 };
 
 const AssignedTasksPage = () => {
@@ -58,7 +61,7 @@ const AssignedTasksPage = () => {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
-  const [interns, setInterns] = useState<Intern[]>([]);
+  const [interns, setInterns] = useState<User[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -68,89 +71,60 @@ const AssignedTasksPage = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     internId: "",
-    status: "TODO" as Task["status"],
     priority: "MEDIUM" as Task["priority"],
     dueDate: "",
+    category: "",
   });
 
-  // Mock data - replace with API call
-  useEffect(() => {
-    if (token) {
-      const mockInterns: Intern[] = [
-        { id: 1, fullName: "John Doe" },
-        { id: 2, fullName: "Jane Smith" },
-        { id: 3, fullName: "Mike Johnson" },
-        { id: 4, fullName: "Sarah Williams" },
-      ];
+  // Fetch tasks and interns from backend
+  const fetchData = useCallback(async () => {
+    if (!token) return;
 
-      const mockTasks: Task[] = [
-        {
-          id: 1,
-          title: "API Integration",
-          description: "Integrate REST API endpoints with frontend",
-          internId: 1,
-          internName: "John Doe",
-          status: "COMPLETED",
-          priority: "HIGH",
-          dueDate: "2025-10-15",
-          createdAt: "2025-10-01",
-        },
-        {
-          id: 2,
-          title: "Design Wireframes",
-          description: "Create wireframes for user dashboard",
-          internId: 2,
-          internName: "Jane Smith",
-          status: "IN_PROGRESS",
-          priority: "MEDIUM",
-          dueDate: "2025-10-20",
-          createdAt: "2025-10-05",
-        },
-        {
-          id: 3,
-          title: "Data Analysis Report",
-          description: "Analyze Q3 sales data and create report",
-          internId: 3,
-          internName: "Mike Johnson",
-          status: "REVIEW",
-          priority: "HIGH",
-          dueDate: "2025-10-18",
-          createdAt: "2025-10-03",
-        },
-        {
-          id: 4,
-          title: "Unit Testing",
-          description: "Write unit tests for authentication module",
-          internId: 1,
-          internName: "John Doe",
-          status: "TODO",
-          priority: "MEDIUM",
-          dueDate: "2025-10-25",
-          createdAt: "2025-10-10",
-        },
-        {
-          id: 5,
-          title: "Database Optimization",
-          description: "Optimize database queries for better performance",
-          internId: 4,
-          internName: "Sarah Williams",
-          status: "IN_PROGRESS",
-          priority: "LOW",
-          dueDate: "2025-10-30",
-          createdAt: "2025-10-08",
-        },
-      ];
+    setIsLoading(true);
+    setError(null);
 
-      setInterns(mockInterns);
-      setTasks(mockTasks);
-      setFilteredTasks(mockTasks);
+    try {
+      // Get supervisor ID from token
+      const tokenPayload = decodeJwt(token);
+      const supervisorId = tokenPayload?.userId;
+
+      // Fetch tasks and users in parallel
+      const [supervisionTasks, allUsers] = await Promise.all([
+        taskApi.getSupervisionTasks(),
+        userApi.getAll(),
+      ]);
+
+      // Filter for interns supervised by this supervisor
+      const supervisedInterns = allUsers.filter(
+        (user) => user.role === "INTERN" && user.supervisorId === supervisorId
+      );
+
+      setTasks(supervisionTasks);
+      setFilteredTasks(supervisionTasks);
+      setInterns(supervisedInterns);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load tasks data"
+      );
+      // Show alert instead of toast for now
+      alert("Failed to load tasks. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Filter tasks
   useEffect(() => {
@@ -160,7 +134,7 @@ const AssignedTasksPage = () => {
       filtered = filtered.filter(
         (task) =>
           task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          task.internName.toLowerCase().includes(searchTerm.toLowerCase())
+          task.intern?.fullName.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -181,58 +155,113 @@ const AssignedTasksPage = () => {
     setFilteredTasks(filtered);
   }, [searchTerm, statusFilter, priorityFilter, internFilter, tasks]);
 
-  const handleCreateTask = () => {
-    // API call would go here
-    const newTask: Task = {
-      id: tasks.length + 1,
-      title: formData.title,
-      description: formData.description,
-      internId: parseInt(formData.internId),
-      internName:
-        interns.find((i) => i.id === parseInt(formData.internId))?.fullName ||
-        "",
-      status: formData.status,
-      priority: formData.priority,
-      dueDate: formData.dueDate,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
+  const handleCreateTask = async () => {
+    if (!formData.title || !formData.internId || !formData.priority) {
+      alert("Please fill in all required fields.");
+      return;
+    }
 
-    setTasks([...tasks, newTask]);
-    setIsCreateDialogOpen(false);
-    resetForm();
+    setIsSubmitting(true);
+
+    try {
+      const newTask = await taskApi.create({
+        title: formData.title,
+        description: formData.description,
+        internId: parseInt(formData.internId),
+        priority: formData.priority,
+        dueDate: formData.dueDate || undefined,
+        category: formData.category || undefined,
+      });
+
+      // Add intern details to the task for display
+      const internDetails = interns.find(
+        (i) => i.id === parseInt(formData.internId)
+      );
+      const taskWithIntern = {
+        ...newTask,
+        intern: internDetails
+          ? {
+              id: internDetails.id,
+              fullName: internDetails.fullName,
+              email: internDetails.email,
+            }
+          : undefined,
+      };
+
+      setTasks([taskWithIntern, ...tasks]);
+      setIsCreateDialogOpen(false);
+      resetForm();
+
+      alert("Task created successfully!");
+    } catch (err) {
+      console.error("Error creating task:", err);
+      alert("Failed to create task. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleEditTask = () => {
+  const handleEditTask = async () => {
     if (!editingTask) return;
 
-    // API call would go here
-    const updatedTasks = tasks.map((task) =>
-      task.id === editingTask.id
-        ? {
-            ...task,
-            title: formData.title,
-            description: formData.description,
-            internId: parseInt(formData.internId),
-            internName:
-              interns.find((i) => i.id === parseInt(formData.internId))
-                ?.fullName || "",
-            status: formData.status,
-            priority: formData.priority,
-            dueDate: formData.dueDate,
-          }
-        : task
-    );
+    setIsSubmitting(true);
 
-    setTasks(updatedTasks);
-    setIsEditDialogOpen(false);
-    setEditingTask(null);
-    resetForm();
+    try {
+      const updatedTask = await taskApi.update(editingTask.id, {
+        title: formData.title,
+        description: formData.description,
+        internId: parseInt(formData.internId),
+        priority: formData.priority,
+        dueDate: formData.dueDate || undefined,
+        category: formData.category || undefined,
+      });
+
+      // Update local state
+      const internDetails = interns.find(
+        (i) => i.id === parseInt(formData.internId)
+      );
+      const taskWithIntern = {
+        ...updatedTask,
+        intern: internDetails
+          ? {
+              id: internDetails.id,
+              fullName: internDetails.fullName,
+              email: internDetails.email,
+            }
+          : undefined,
+      };
+
+      setTasks(
+        tasks.map((task) =>
+          task.id === editingTask.id ? taskWithIntern : task
+        )
+      );
+
+      setIsEditDialogOpen(false);
+      setEditingTask(null);
+      resetForm();
+
+      alert("Task updated successfully!");
+    } catch (err) {
+      console.error("Error updating task:", err);
+      alert("Failed to update task. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteTask = (taskId: number) => {
-    if (confirm("Are you sure you want to delete this task?")) {
-      // API call would go here
+  const handleDeleteTask = async (taskId: number) => {
+    if (!confirm("Are you sure you want to delete this task?")) return;
+
+    try {
+      // Note: You may need to add a delete endpoint to your backend
+      // For now, we'll just remove it from local state
       setTasks(tasks.filter((task) => task.id !== taskId));
+
+      alert("Task deleted successfully!");
+    } catch (err) {
+      console.error("Error deleting task:", err);
+      alert("Failed to delete task. Please try again.");
     }
   };
 
@@ -240,11 +269,13 @@ const AssignedTasksPage = () => {
     setEditingTask(task);
     setFormData({
       title: task.title,
-      description: task.description,
+      description: task.description || "",
       internId: task.internId.toString(),
-      status: task.status,
       priority: task.priority,
-      dueDate: task.dueDate,
+      dueDate: task.dueDate
+        ? new Date(task.dueDate).toISOString().split("T")[0]
+        : "",
+      category: task.category || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -254,9 +285,9 @@ const AssignedTasksPage = () => {
       title: "",
       description: "",
       internId: "",
-      status: "TODO",
       priority: "MEDIUM",
       dueDate: "",
+      category: "",
     });
   };
 
@@ -266,8 +297,6 @@ const AssignedTasksPage = () => {
         return "bg-gray-100 text-gray-700";
       case "IN_PROGRESS":
         return "bg-blue-100 text-blue-700";
-      case "REVIEW":
-        return "bg-yellow-100 text-yellow-700";
       case "COMPLETED":
         return "bg-green-100 text-green-700";
       default:
@@ -292,9 +321,28 @@ const AssignedTasksPage = () => {
     total: tasks.length,
     todo: tasks.filter((t) => t.status === "TODO").length,
     inProgress: tasks.filter((t) => t.status === "IN_PROGRESS").length,
-    review: tasks.filter((t) => t.status === "REVIEW").length,
     completed: tasks.filter((t) => t.status === "COMPLETED").length,
   };
+
+  // Error state
+  if (error && !isLoading) {
+    return (
+      <div className="p-4">
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <p className="font-medium">Error loading tasks</p>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">{error}</p>
+            <Button onClick={fetchData} className="mt-4" size="sm">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -327,7 +375,9 @@ const AssignedTasksPage = () => {
 
               <div className="space-y-4 py-4">
                 <div>
-                  <Label htmlFor="title">Task Title</Label>
+                  <Label htmlFor="title">
+                    Task Title <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="title"
                     value={formData.title}
@@ -353,7 +403,9 @@ const AssignedTasksPage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="intern">Assign to Intern</Label>
+                    <Label htmlFor="intern">
+                      Assign to Intern <span className="text-red-500">*</span>
+                    </Label>
                     <Select
                       value={formData.internId}
                       onValueChange={(value) =>
@@ -391,30 +443,9 @@ const AssignedTasksPage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="status">Status</Label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) =>
-                        setFormData({
-                          ...formData,
-                          status: value as Task["status"],
-                        })
-                      }
-                    >
-                      <SelectTrigger id="status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="TODO">To Do</SelectItem>
-                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                        <SelectItem value="REVIEW">Review</SelectItem>
-                        <SelectItem value="COMPLETED">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="priority">Priority</Label>
+                    <Label htmlFor="priority">
+                      Priority <span className="text-red-500">*</span>
+                    </Label>
                     <Select
                       value={formData.priority}
                       onValueChange={(value) =>
@@ -434,21 +465,39 @@ const AssignedTasksPage = () => {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div>
+                    <Label htmlFor="category">Category</Label>
+                    <Input
+                      id="category"
+                      value={formData.category}
+                      onChange={(e) =>
+                        setFormData({ ...formData, category: e.target.value })
+                      }
+                      placeholder="e.g., Development, Design"
+                    />
+                  </div>
                 </div>
               </div>
 
               <DialogFooter>
                 <Button
                   variant="outline"
-                  onClick={() => setIsCreateDialogOpen(false)}
+                  onClick={() => {
+                    setIsCreateDialogOpen(false);
+                    resetForm();
+                  }}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleCreateTask}
-                  disabled={!formData.title || !formData.internId}
+                  disabled={
+                    !formData.title || !formData.internId || isSubmitting
+                  }
                 >
-                  Create Task
+                  {isSubmitting ? "Creating..." : "Create Task"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -480,7 +529,6 @@ const AssignedTasksPage = () => {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="TODO">To Do</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                  <SelectItem value="REVIEW">Review</SelectItem>
                   <SelectItem value="COMPLETED">Completed</SelectItem>
                 </SelectContent>
               </Select>
@@ -517,7 +565,7 @@ const AssignedTasksPage = () => {
         </Card>
 
         {/* Task Stats */}
-        <div className="grid gap-4 md:grid-cols-5 mb-6">
+        <div className="grid gap-4 md:grid-cols-4 mb-6">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -525,7 +573,9 @@ const AssignedTasksPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{taskStats.total}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? "..." : taskStats.total}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -535,7 +585,9 @@ const AssignedTasksPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{taskStats.todo}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? "..." : taskStats.todo}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -545,17 +597,9 @@ const AssignedTasksPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{taskStats.inProgress}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Review
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{taskStats.review}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? "..." : taskStats.inProgress}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -565,17 +609,31 @@ const AssignedTasksPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{taskStats.completed}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? "..." : taskStats.completed}
+              </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Tasks List */}
         <div className="space-y-4">
-          {filteredTasks.length === 0 ? (
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="pt-6">
+                    <div className="h-24 bg-muted animate-pulse rounded" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredTasks.length === 0 ? (
             <Card>
-              <CardContent className="pt-6 text-center text-muted-foreground">
-                No tasks found matching your filters.
+              <CardContent className="pt-6 text-center text-muted-foreground py-12">
+                {tasks.length === 0
+                  ? "No tasks created yet. Create your first task above."
+                  : "No tasks found matching your filters."}
               </CardContent>
             </Card>
           ) : (
@@ -589,23 +647,27 @@ const AssignedTasksPage = () => {
                           <h3 className="font-semibold text-lg mb-1">
                             {task.title}
                           </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {task.description}
-                          </p>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground">
+                              {task.description}
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-4 text-sm">
                         <div className="flex items-center gap-1">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span>{task.internName}</span>
+                          <UserIcon className="h-4 w-4 text-muted-foreground" />
+                          <span>{task.intern?.fullName || "Unassigned"}</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            Due: {new Date(task.dueDate).toLocaleDateString()}
-                          </span>
-                        </div>
+                        {task.dueDate && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>
+                              Due: {new Date(task.dueDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-1">
                           <AlertCircle
                             className={`h-4 w-4 ${getPriorityColor(
@@ -723,29 +785,6 @@ const AssignedTasksPage = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="edit-status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      status: value as Task["status"],
-                    })
-                  }
-                >
-                  <SelectTrigger id="edit-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TODO">To Do</SelectItem>
-                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                    <SelectItem value="REVIEW">Review</SelectItem>
-                    <SelectItem value="COMPLETED">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
                 <Label htmlFor="edit-priority">Priority</Label>
                 <Select
                   value={formData.priority}
@@ -766,17 +805,36 @@ const AssignedTasksPage = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div>
+                <Label htmlFor="edit-category">Category</Label>
+                <Input
+                  id="edit-category"
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                  placeholder="e.g., Development, Design"
+                />
+              </div>
             </div>
           </div>
 
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsEditDialogOpen(false)}
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setEditingTask(null);
+                resetForm();
+              }}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button onClick={handleEditTask}>Save Changes</Button>
+            <Button onClick={handleEditTask} disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save Changes"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
