@@ -1,5 +1,3 @@
-// app/(app)/dashboard/evaluations/page.tsx
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -38,7 +36,10 @@ import {
   Filter,
   MessageSquare,
   AlertCircle,
+  CheckCircle,
+  Info,
 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type EvaluationWithIntern = {
   id: number;
@@ -70,10 +71,18 @@ const decodeJwt = (token: string) => {
   }
 };
 
+// Helper to check if internship has ended
+const hasInternshipEnded = (endDate: string | null): boolean => {
+  if (!endDate) return false;
+  return new Date(endDate) < new Date();
+};
+
 const EvaluationsPage = () => {
   const token = useAuthStore((state) => state.token);
 
-  const [interns, setInterns] = useState<User[]>([]);
+  const [allInterns, setAllInterns] = useState<User[]>([]);
+  const [completedInterns, setCompletedInterns] = useState<User[]>([]);
+  const [activeInterns, setActiveInterns] = useState<User[]>([]);
   const [evaluations, setEvaluations] = useState<EvaluationWithIntern[]>([]);
   const [filteredEvaluations, setFilteredEvaluations] = useState<
     EvaluationWithIntern[]
@@ -101,25 +110,54 @@ const EvaluationsPage = () => {
     setError(null);
 
     try {
-      // Get supervisor ID from token
       const tokenPayload = decodeJwt(token);
       const supervisorId = tokenPayload?.userId;
 
       // Fetch all users
       const allUsers = await userApi.getAll();
 
-      // Filter for interns supervised by this supervisor
       const supervisedInterns = allUsers.filter(
         (user) => user.role === "INTERN" && user.supervisorId === supervisorId
       );
 
-      setInterns(supervisedInterns);
+      setAllInterns(supervisedInterns);
 
-      // Note: Your backend doesn't have an endpoint to get all evaluations
-      // You'll need to add this endpoint or fetch individually per intern
-      // For now, we'll set empty array - see note below
-      setEvaluations([]);
-      setFilteredEvaluations([]);
+      const completed = supervisedInterns.filter((intern) =>
+        hasInternshipEnded(intern.endDate)
+      );
+      const active = supervisedInterns.filter(
+        (intern) => !hasInternshipEnded(intern.endDate)
+      );
+
+      setCompletedInterns(completed);
+      setActiveInterns(active);
+
+      // FETCH EVALUATIONS FROM DATABASE
+      const fetchedEvaluations = await evaluationApi.getSupervisorEvaluations();
+
+      // Transform to match your component's format
+      const transformedEvaluations: EvaluationWithIntern[] =
+        fetchedEvaluations.map((evaluation: any) => ({
+          id: evaluation.id,
+          internId: evaluation.internId,
+          internName: evaluation.intern?.fullName || "Unknown",
+          technicalScore: evaluation.technicalScore,
+          communicationScore: evaluation.communicationScore,
+          teamworkScore: evaluation.teamworkScore,
+          overallScore:
+            Math.round(
+              ((evaluation.technicalScore +
+                evaluation.communicationScore +
+                evaluation.teamworkScore) /
+                3) *
+                10
+            ) / 10,
+          comments: evaluation.comments,
+          submittedAt: evaluation.submittedAt,
+        }));
+
+      setEvaluations(transformedEvaluations);
+      setFilteredEvaluations(transformedEvaluations);
     } catch (err) {
       console.error("Error fetching data:", err);
       setError(
@@ -149,11 +187,12 @@ const EvaluationsPage = () => {
 
   const handleSubmitEvaluation = async () => {
     if (!formData.internId || !formData.comments.trim()) {
-      alert("Please select an intern and provide comments.");
+      setError("Please select an intern and provide comments.");
       return;
     }
 
     setIsSubmitting(true);
+    setError(null);
 
     try {
       await evaluationApi.submit({
@@ -164,35 +203,21 @@ const EvaluationsPage = () => {
         comments: formData.comments,
       });
 
-      // Create a local evaluation object for display
-      const overallScore =
-        (formData.technicalScore +
-          formData.communicationScore +
-          formData.teamworkScore) /
-        3;
+      // Refresh from database
+      await fetchData();
 
-      const newEvaluation: EvaluationWithIntern = {
-        id: evaluations.length + 1,
-        internId: parseInt(formData.internId),
-        internName:
-          interns.find((i) => i.id === parseInt(formData.internId))?.fullName ||
-          "",
-        technicalScore: formData.technicalScore,
-        communicationScore: formData.communicationScore,
-        teamworkScore: formData.teamworkScore,
-        overallScore: Math.round(overallScore * 10) / 10,
-        comments: formData.comments,
-        submittedAt: new Date().toISOString(),
-      };
-
-      setEvaluations([newEvaluation, ...evaluations]);
       setIsDialogOpen(false);
       resetForm();
 
-      alert("Evaluation submitted successfully!");
+      // Show success message (you can replace alert with a toast)
+      setError(null);
     } catch (err) {
       console.error("Error submitting evaluation:", err);
-      alert("Failed to submit evaluation. Please try again.");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to submit evaluation. Please try again.";
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -220,15 +245,10 @@ const EvaluationsPage = () => {
     return "bg-red-100";
   };
 
-  // Get interns that haven't been evaluated recently
-  const internsForEvaluation = interns.filter(
+  // Get completed interns that haven't been evaluated
+  const internsReadyForEvaluation = completedInterns.filter(
     (intern) =>
-      !evaluations.some(
-        (evaluation) =>
-          evaluation.internId === intern.id &&
-          new Date(evaluation.submittedAt).getTime() >
-            Date.now() - 30 * 24 * 60 * 60 * 1000 // 30 days
-      )
+      !evaluations.some((evaluation) => evaluation.internId === intern.id)
   );
 
   const averageScores = {
@@ -285,13 +305,13 @@ const EvaluationsPage = () => {
           <div>
             <h1 className="text-3xl font-bold">Evaluations</h1>
             <p className="text-muted-foreground">
-              Submit and manage intern evaluations
+              Submit end-of-internship evaluations
             </p>
           </div>
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={completedInterns.length === 0}>
                 <Plus className="h-4 w-4 mr-2" />
                 Submit Evaluation
               </Button>
@@ -319,17 +339,24 @@ const EvaluationsPage = () => {
                       <SelectValue placeholder="Choose an intern to evaluate" />
                     </SelectTrigger>
                     <SelectContent>
-                      {interns.map((intern) => (
+                      {completedInterns.map((intern) => (
                         <SelectItem
                           key={intern.id}
                           value={intern.id.toString()}
                         >
                           {intern.fullName}
                           {intern.domain && ` - ${intern.domain}`}
+                          {intern.endDate &&
+                            ` (Ended: ${new Date(
+                              intern.endDate
+                            ).toLocaleDateString()})`}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Only interns who have completed their internship period
+                  </p>
                 </div>
 
                 <div className="space-y-4 pt-2">
@@ -469,6 +496,19 @@ const EvaluationsPage = () => {
       </header>
 
       <main className="p-4">
+        {/* Info Alert about Active Interns */}
+        {!isLoading && activeInterns.length > 0 && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              <strong>{activeInterns.length}</strong> intern
+              {activeInterns.length !== 1 ? "s are" : " is"} currently in active
+              internship periods. Evaluations can only be submitted after their
+              end date has passed.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Summary Stats */}
         <div className="grid gap-4 md:grid-cols-4 mb-6">
           <Card>
@@ -537,17 +577,20 @@ const EvaluationsPage = () => {
         </div>
 
         {/* Interns Ready for Evaluation */}
-        {!isLoading && internsForEvaluation.length > 0 && (
+        {!isLoading && internsReadyForEvaluation.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Interns Ready for Evaluation</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                Interns Ready for Evaluation
+              </CardTitle>
               <CardDescription>
-                These interns haven&apos;t been evaluated in the last 30 days
+                These interns have completed their internship period
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {internsForEvaluation.map((intern) => (
+                {internsReadyForEvaluation.map((intern) => (
                   <div
                     key={intern.id}
                     className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
@@ -562,7 +605,10 @@ const EvaluationsPage = () => {
                       <div>
                         <p className="font-medium">{intern.fullName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {intern.domain || "No domain specified"}
+                          {intern.domain || "No domain"} • Ended:{" "}
+                          {intern.endDate
+                            ? new Date(intern.endDate).toLocaleDateString()
+                            : "N/A"}
                         </p>
                       </div>
                     </div>
@@ -585,34 +631,55 @@ const EvaluationsPage = () => {
           </Card>
         )}
 
+        {/* No Completed Internships Message */}
+        {!isLoading &&
+          completedInterns.length === 0 &&
+          activeInterns.length > 0 && (
+            <Card className="mb-6">
+              <CardContent className="pt-6 text-center py-12">
+                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">
+                  No Completed Internships Yet
+                </h3>
+                <p className="text-muted-foreground">
+                  You have {activeInterns.length} active intern
+                  {activeInterns.length !== 1 ? "s" : ""}. Evaluations will be
+                  available after their internship end date.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
         {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <Select value={internFilter} onValueChange={setInternFilter}>
-                <SelectTrigger className="w-full md:w-[300px]">
-                  <SelectValue placeholder="Filter by Intern" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Interns</SelectItem>
-                  {interns.map((intern) => (
-                    <SelectItem key={intern.id} value={intern.id.toString()}>
-                      {intern.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {evaluations.length > 0 && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Select value={internFilter} onValueChange={setInternFilter}>
+                  <SelectTrigger className="w-full md:w-[300px]">
+                    <SelectValue placeholder="Filter by Intern" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Interns</SelectItem>
+                    {allInterns.map((intern) => (
+                      <SelectItem key={intern.id} value={intern.id.toString()}>
+                        {intern.fullName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Evaluations History */}
         <Card>
           <CardHeader>
             <CardTitle>Evaluation History</CardTitle>
             <CardDescription>
-              Past evaluations submitted for your interns
+              Past evaluations submitted for completed internships
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -630,7 +697,7 @@ const EvaluationsPage = () => {
                 <p className="text-lg mb-2">No evaluations found</p>
                 <p className="text-sm">
                   {evaluations.length === 0
-                    ? "Submit your first evaluation to get started!"
+                    ? "Submit your first evaluation when an internship ends!"
                     : "No evaluations match your selected filter."}
                 </p>
               </div>

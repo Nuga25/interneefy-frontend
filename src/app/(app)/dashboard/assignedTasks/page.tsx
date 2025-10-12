@@ -1,5 +1,3 @@
-// app/(app)/dashboard/assignedTasks/page.tsx
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -36,7 +34,6 @@ import {
   User as UserIcon,
   AlertCircle,
 } from "lucide-react";
-// import { useToast } from "@/components/ui/use-toast"; // Commented out for now
 
 // Helper to decode JWT
 const decodeJwt = (token: string) => {

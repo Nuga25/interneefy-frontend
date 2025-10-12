@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
-import { userApi, taskApi, Task, User } from "@/lib/api";
+import { userApi, taskApi, User } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -16,11 +16,8 @@ import {
   CheckCircle2,
   Clock,
   TrendingUp,
-  UserPlus,
-  ClipboardCheck,
   AlertCircle,
 } from "lucide-react";
-import { BarChartComponent } from "@/components/Charts";
 
 // Types
 type Activity = {
@@ -80,9 +77,7 @@ const SupervisorDashboard = () => {
   const token = useAuthStore((state) => state.token);
 
   const [supervisorName, setSupervisorName] = useState<string>("Supervisor");
-  const [supervisorId, setSupervisorId] = useState<number | null>(null);
   const [interns, setInterns] = useState<InternWithProgress[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [taskStats, setTaskStats] = useState({
     total: 0,
@@ -90,9 +85,6 @@ const SupervisorDashboard = () => {
     inProgress: 0,
     completed: 0,
   });
-  const [taskChartData, setTaskChartData] = useState<
-    Array<{ name: string; tasks: number }>
-  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,7 +99,6 @@ const SupervisorDashboard = () => {
       // Get supervisor info from token
       const tokenPayload = decodeJwt(token);
       setSupervisorName(tokenPayload?.fullName || "Supervisor");
-      setSupervisorId(tokenPayload?.userId);
 
       // Fetch all users and tasks in parallel
       const [allUsers, supervisionTasks] = await Promise.all([
@@ -147,7 +138,6 @@ const SupervisorDashboard = () => {
       );
 
       setInterns(internsWithProgress);
-      setTasks(supervisionTasks);
 
       // Calculate task statistics
       const stats = {
@@ -163,22 +153,14 @@ const SupervisorDashboard = () => {
       };
       setTaskStats(stats);
 
-      // Prepare chart data
-      const chartData = [
-        { name: "TODO", tasks: stats.pending },
-        { name: "IN PROGRESS", tasks: stats.inProgress },
-        { name: "COMPLETED", tasks: stats.completed },
-      ];
-      setTaskChartData(chartData);
-
       // Generate recent activities from tasks
       const activities: Activity[] = supervisionTasks
-        .slice(0, 10) // Get latest 10 tasks
+        .slice(0, 10)
         .sort(
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )
-        .slice(0, 4) // Show top 4
+        .slice(0, 4)
         .map((task, index) => ({
           id: index + 1,
           message: `${task.intern?.fullName || "Intern"} ${
@@ -314,14 +296,97 @@ const SupervisorDashboard = () => {
         </div>
 
         {/* Charts and Activities */}
-        <div className="grid gap-4 md:grid-cols-2 mb-6">
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Tasks by Status</CardTitle>
               <CardDescription>Overview of all assigned tasks</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <BarChartComponent data={taskChartData} isLoading={isLoading} />
+            <CardContent className="pt-6">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-16 bg-muted animate-pulse rounded"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* TODO */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">To Do</span>
+                      <span className="text-sm font-bold">
+                        {taskStats.pending}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-3">
+                      <div
+                        className="bg-gray-500 h-3 rounded-full transition-all"
+                        style={{
+                          width: `${
+                            taskStats.total > 0
+                              ? (taskStats.pending / taskStats.total) * 100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* IN PROGRESS */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">In Progress</span>
+                      <span className="text-sm font-bold">
+                        {taskStats.inProgress}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-3">
+                      <div
+                        className="bg-blue-500 h-3 rounded-full transition-all"
+                        style={{
+                          width: `${
+                            taskStats.total > 0
+                              ? (taskStats.inProgress / taskStats.total) * 100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* COMPLETED */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Completed</span>
+                      <span className="text-sm font-bold">
+                        {taskStats.completed}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-3">
+                      <div
+                        className="bg-green-500 h-3 rounded-full transition-all"
+                        style={{
+                          width: `${
+                            taskStats.total > 0
+                              ? (taskStats.completed / taskStats.total) * 100
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {taskStats.total === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">
+                      No tasks created yet
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -375,126 +440,6 @@ const SupervisorDashboard = () => {
             </CardContent>
           </Card>
         </div>
-
-        {/* Supervised Interns */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Supervised Interns</CardTitle>
-              <CardDescription>
-                Track progress of interns under your supervision
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Assign Task
-              </Button>
-              <Button size="sm">
-                <ClipboardCheck className="h-4 w-4 mr-2" />
-                Submit Evaluation
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-32 bg-muted animate-pulse rounded"
-                  />
-                ))}
-              </div>
-            ) : interns.length > 0 ? (
-              <div className="space-y-4">
-                {interns.map((intern) => (
-                  <Card key={intern.id}>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="bg-primary/10 text-primary rounded-full h-10 w-10 flex items-center justify-center font-medium">
-                              {getInitials(intern.fullName)}
-                            </div>
-                            <div>
-                              <h3 className="font-semibold">
-                                {intern.fullName}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {intern.email}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 mt-4">
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Domain
-                              </p>
-                              <p className="text-sm font-medium">
-                                {intern.domain || "Not specified"}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Active Tasks
-                              </p>
-                              <p className="text-sm font-medium">
-                                {intern.activeTasks}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Start Date
-                              </p>
-                              <p className="text-sm font-medium">
-                                {intern.startDate
-                                  ? new Date(
-                                      intern.startDate
-                                    ).toLocaleDateString()
-                                  : "N/A"}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Progress
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-muted rounded-full h-2">
-                                  <div
-                                    className="bg-primary h-2 rounded-full transition-all"
-                                    style={{ width: `${intern.progress}%` }}
-                                  />
-                                </div>
-                                <span className="text-sm font-medium">
-                                  {intern.progress}%
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-2 ml-4">
-                          <Button size="sm" variant="outline">
-                            View Profile
-                          </Button>
-                          <Button size="sm" variant="outline">
-                            Assign Task
-                          </Button>
-                          <Button size="sm">Evaluate</Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No interns assigned yet</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </main>
     </div>
   );

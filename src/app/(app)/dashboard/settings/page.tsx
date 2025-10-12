@@ -296,10 +296,6 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label className="text-muted-foreground">Company ID</Label>
-                <p className="text-sm font-mono">{company?.id}</p>
-              </div>
-              <div>
                 <Label className="text-muted-foreground">Created On</Label>
                 <p className="text-sm">
                   {company?.createdAt

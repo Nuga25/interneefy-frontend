@@ -100,7 +100,10 @@ export const taskApi = {
 export const evaluationApi = {
   // Get evaluation for current intern
   getMyEvaluation: () => apiRequest<Evaluation>("/api/evaluations/me"),
-  getAll: () => apiRequest<Evaluation[]>("/api/evaluations"),
+
+  // Get all evaluations for a supervisor's interns
+  getSupervisorEvaluations: () =>
+    apiRequest<Evaluation[]>("/api/evaluations/supervisor"),
 
   // Submit evaluation (Supervisor only)
   submit: (evaluationData: CreateEvaluationData) =>

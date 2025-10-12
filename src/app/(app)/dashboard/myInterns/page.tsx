@@ -1,17 +1,9 @@
-// app/(app)/dashboard/myInterns/page.tsx
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
-import { userApi, taskApi, User, Task } from "@/lib/api";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { userApi, taskApi, User } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,14 +14,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Search,
   Filter,
-  UserPlus,
-  ClipboardCheck,
   Mail,
   Calendar,
   TrendingUp,
   AlertCircle,
+  User as UserIcon,
+  Briefcase,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 
 type InternWithStats = User & {
@@ -46,7 +47,6 @@ const getInitials = (fullName: string) => {
   return `${firstInitial}${lastInitial}`;
 };
 
-// Helper to decode JWT
 const decodeJwt = (token: string) => {
   try {
     const base64Url = token.split(".")[1];
@@ -69,13 +69,16 @@ const MyInternsPage = () => {
 
   const [interns, setInterns] = useState<InternWithStats[]>([]);
   const [filteredInterns, setFilteredInterns] = useState<InternWithStats[]>([]);
+  const [selectedIntern, setSelectedIntern] = useState<InternWithStats | null>(
+    null
+  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch interns data from backend
   const fetchInterns = useCallback(async () => {
     if (!token) return;
 
@@ -83,22 +86,18 @@ const MyInternsPage = () => {
     setError(null);
 
     try {
-      // Get supervisor ID from token
       const tokenPayload = decodeJwt(token);
       const supervisorId = tokenPayload?.userId;
 
-      // Fetch all users and tasks in parallel
       const [allUsers, allTasks] = await Promise.all([
         userApi.getAll(),
         taskApi.getSupervisionTasks(),
       ]);
 
-      // Filter for interns supervised by this supervisor
       const supervisedInterns = allUsers.filter(
         (user) => user.role === "INTERN" && user.supervisorId === supervisorId
       );
 
-      // Calculate stats for each intern
       const internsWithStats: InternWithStats[] = supervisedInterns.map(
         (intern) => {
           const internTasks = allTasks.filter(
@@ -115,18 +114,11 @@ const MyInternsPage = () => {
               ? Math.round((completedTasks / internTasks.length) * 100)
               : 0;
 
-          // Determine status based on end date
           const now = new Date();
           const endDate = intern.endDate ? new Date(intern.endDate) : null;
           const status = endDate && endDate < now ? "Completed" : "Active";
 
-          return {
-            ...intern,
-            status,
-            progress,
-            activeTasks,
-            completedTasks,
-          };
+          return { ...intern, status, progress, activeTasks, completedTasks };
         }
       );
 
@@ -146,7 +138,6 @@ const MyInternsPage = () => {
     fetchInterns();
   }, [fetchInterns]);
 
-  // Filter interns based on search and filters
   useEffect(() => {
     let filtered = interns;
 
@@ -167,12 +158,15 @@ const MyInternsPage = () => {
     setFilteredInterns(filtered);
   }, [searchTerm, domainFilter, statusFilter, interns]);
 
-  // Get unique domains from interns
   const domains = Array.from(
     new Set(interns.map((intern) => intern.domain).filter(Boolean))
   ) as string[];
 
-  // Error state
+  const handleViewDetails = (intern: InternWithStats) => {
+    setSelectedIntern(intern);
+    setIsModalOpen(true);
+  };
+
   if (error) {
     return (
       <div className="p-4">
@@ -202,7 +196,7 @@ const MyInternsPage = () => {
       </header>
 
       <main className="p-4">
-        {/* Filters and Search */}
+        {/* Filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row gap-4">
@@ -246,7 +240,7 @@ const MyInternsPage = () => {
           </CardContent>
         </Card>
 
-        {/* Stats Summary */}
+        {/* Stats */}
         <div className="grid gap-4 md:grid-cols-3 mb-6">
           <Card>
             <CardHeader className="pb-3">
@@ -293,7 +287,6 @@ const MyInternsPage = () => {
         {/* Interns List */}
         <div className="space-y-4">
           {isLoading ? (
-            // Loading skeleton
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
                 <Card key={i}>
@@ -316,7 +309,6 @@ const MyInternsPage = () => {
               <Card key={intern.id}>
                 <CardContent className="pt-6">
                   <div className="flex flex-col md:flex-row gap-4">
-                    {/* Intern Info */}
                     <div className="flex items-start gap-4 flex-1">
                       <div className="bg-primary/10 text-primary rounded-full h-12 w-12 flex items-center justify-center font-medium flex-shrink-0">
                         {getInitials(intern.fullName)}
@@ -392,7 +384,6 @@ const MyInternsPage = () => {
                           </div>
                         </div>
 
-                        {/* Progress Bar */}
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-xs text-muted-foreground">
@@ -412,26 +403,14 @@ const MyInternsPage = () => {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="flex md:flex-col gap-2 justify-end">
                       <Button
                         size="sm"
                         variant="outline"
                         className="flex-1 md:flex-none"
+                        onClick={() => handleViewDetails(intern)}
                       >
-                        View Profile
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 md:flex-none"
-                      >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Assign Task
-                      </Button>
-                      <Button size="sm" className="flex-1 md:flex-none">
-                        <ClipboardCheck className="h-4 w-4 mr-2" />
-                        Evaluate
+                        View Details
                       </Button>
                     </div>
                   </div>
@@ -440,6 +419,216 @@ const MyInternsPage = () => {
             ))
           )}
         </div>
+
+        {/* Details Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Intern Details</DialogTitle>
+              <DialogDescription>
+                Complete information about the intern
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedIntern && (
+              <div className="space-y-6 py-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-primary/10 text-primary rounded-full h-16 w-16 flex items-center justify-center font-bold text-xl flex-shrink-0">
+                    {getInitials(selectedIntern.fullName)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-2xl font-bold">
+                        {selectedIntern.fullName}
+                      </h3>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          selectedIntern.status === "Active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {selectedIntern.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{selectedIntern.email}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <Briefcase className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Domain
+                          </p>
+                          <p className="font-semibold">
+                            {selectedIntern.domain || "Not specified"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                          <UserIcon className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Role</p>
+                          <p className="font-semibold">{selectedIntern.role}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                          <Calendar className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Start Date
+                          </p>
+                          <p className="font-semibold">
+                            {selectedIntern.startDate
+                              ? new Date(
+                                  selectedIntern.startDate
+                                ).toLocaleDateString()
+                              : "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                          <Clock className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            End Date
+                          </p>
+                          <p className="font-semibold">
+                            {selectedIntern.endDate
+                              ? new Date(
+                                  selectedIntern.endDate
+                                ).toLocaleDateString()
+                              : "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Task Statistics</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <p className="text-2xl font-bold text-blue-600">
+                            {selectedIntern.activeTasks}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Active Tasks
+                        </p>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <p className="text-2xl font-bold text-green-600">
+                            {selectedIntern.completedTasks}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Completed
+                        </p>
+                      </div>
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <TrendingUp className="h-4 w-4 text-purple-600" />
+                          <p className="text-2xl font-bold text-purple-600">
+                            {selectedIntern.progress}%
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Progress
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-medium">Overall Progress</p>
+                        <span className="text-sm font-bold">
+                          {selectedIntern.progress}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-3">
+                        <div
+                          className="bg-primary h-3 rounded-full transition-all"
+                          style={{ width: `${selectedIntern.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {selectedIntern.createdAt && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Additional Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Created At:
+                          </span>
+                          <span className="font-medium">
+                            {new Date(
+                              selectedIntern.createdAt
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            User ID:
+                          </span>
+                          <span className="font-medium">
+                            {selectedIntern.id}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
