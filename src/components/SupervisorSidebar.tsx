@@ -1,19 +1,61 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "./ui/button";
-import { LayoutDashboard, Users, CheckSquare, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  CheckSquare,
+  LogOut,
+  Building2,
+} from "lucide-react";
 
 type SupervisorSidebarProps = {
-  onLinkClick?: () => void; // Optional callback for mobile menu closure
+  onLinkClick?: () => void;
+};
+
+type Company = {
+  id: number;
+  name: string;
+  logoUrl: string | null;
 };
 
 export function SupervisorSidebar({ onLinkClick }: SupervisorSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
+  const token = useAuthStore((state) => state.token);
+
+  const [company, setCompany] = useState<Company | null>(null);
+  const [logoError, setLogoError] = useState(false);
+
+  //fetch company details
+  useEffect(() => {
+    const fetchCompany = async () => {
+      if (!token) return;
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/company`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setCompany(data);
+        }
+      } catch (error) {
+        console.error("Error fetching company:", error);
+      }
+    };
+
+    fetchCompany();
+  }, [token]);
 
   const handleLogout = () => {
     logout();
@@ -46,9 +88,31 @@ export function SupervisorSidebar({ onLinkClick }: SupervisorSidebarProps) {
           className="flex items-center gap-2"
           onClick={onLinkClick}
         >
-          <span className="font-bold text-2xl">TechCorp Solutions</span>
+          {/* Company Logo */}
+          {company?.logoUrl && !logoError ? (
+            <div className="relative h-8 w-8 flex-shrink-0">
+              <Image
+                src={company.logoUrl}
+                alt={`${company.name} logo`}
+                fill
+                className="object-contain rounded"
+                unoptimized
+                onError={() => setLogoError(true)}
+              />
+            </div>
+          ) : (
+            <div className="h-8 w-8 flex-shrink-0 rounded bg-primary/10 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-primary" />
+            </div>
+          )}
+
+          {/* Company Name */}
+          <span className="font-bold text-xl truncate">
+            {company?.name || "Loading..."}
+          </span>
         </Link>
       </div>
+
       <nav className="flex-1 space-y-2">
         {navLinks.map((link) => (
           <Link
@@ -76,17 +140,6 @@ export function SupervisorSidebar({ onLinkClick }: SupervisorSidebarProps) {
           <LogOut className="h-5 w-5" />
           <span>Logout</span>
         </Button>
-      </div>
-      <div className="mt-auto pt-4 border-t border-muted/20">
-        <div className="flex items-center gap-3">
-          <div className="relative h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold">
-            SJ
-          </div>
-          <div>
-            <p className="font-semibold text-white">Sarah Johnson</p>
-            <p className="text-xs text-muted-foreground">Supervisor</p>
-          </div>
-        </div>
       </div>
     </>
   );

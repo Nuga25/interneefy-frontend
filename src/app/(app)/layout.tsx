@@ -18,14 +18,26 @@ type DecodedToken = {
   role: "ADMIN" | "SUPERVISOR" | "INTERN";
 };
 
+type Company = {
+  id: number;
+  name: string;
+  logoUrl: string | null;
+};
+
 // Component for the mobile header/toggle
-const MobileHeader = ({ toggleMenu }: { toggleMenu: () => void }) => {
+const MobileHeader = ({
+  toggleMenu,
+  company,
+}: {
+  toggleMenu: () => void;
+  company: Company | null;
+}) => {
   return (
     <header className="flex lg:hidden items-center justify-between p-4 bg-background border-b h-16 sticky top-0 z-20">
-      {/* Logo/Company Name */}
+      {/* Logo/Company Name - Now dynamic */}
       <Link href="/dashboard" className="flex items-center gap-2">
         <span className="font-bold text-lg text-foreground">
-          TechCorp Solutions
+          {company?.name || "Loading..."}
         </span>
       </Link>
 
@@ -52,10 +64,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
+  // Company State for Mobile Header
+  const [company, setCompany] = useState<Company | null>(null);
+
   // Close mobile menu on navigation change
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
+
+  // Fetch company details (shared for mobile header)
+  useEffect(() => {
+    const fetchCompany = async () => {
+      if (!token) return;
+
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/company`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setCompany(data);
+        }
+      } catch (error) {
+        console.error("Error fetching company:", error);
+      }
+    };
+
+    fetchCompany();
+  }, [token]);
 
   // Authentication and Hydration Logic
   if (hasHydrated && !token) {
@@ -104,7 +144,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Header - Visible only on small screens */}
-      <MobileHeader toggleMenu={toggleMobileMenu} />
+      <MobileHeader toggleMenu={toggleMobileMenu} company={company} />
 
       {/* Off-Canvas Mobile Menu Overlay (Conditional Rendering) */}
       {isMobileMenuOpen && (

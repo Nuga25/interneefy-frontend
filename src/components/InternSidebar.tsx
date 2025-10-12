@@ -1,19 +1,62 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "./ui/button";
-import { User, CheckSquare, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  CheckSquare,
+  LogOut,
+  Building2,
+  User,
+} from "lucide-react";
 
 type InternSidebarProps = {
-  onLinkClick?: () => void; // Optional callback for mobile menu closure
+  onLinkClick?: () => void; // callback for mobile menu closure
+};
+
+type Company = {
+  id: number;
+  name: string;
+  logoUrl: string | null;
 };
 
 export function InternSidebar({ onLinkClick }: InternSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
+  const token = useAuthStore((state) => state.token);
+
+  const [company, setCompany] = useState<Company | null>(null);
+  const [logoError, setLogoError] = useState(false);
+
+  // Fetch company details
+  useEffect(() => {
+    const fetchCompany = async () => {
+      if (!token) return;
+
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/company`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setCompany(data);
+        }
+      } catch (error) {
+        console.error("Error fetching company:", error);
+      }
+    };
+
+    fetchCompany();
+  }, [token]);
 
   const handleLogout = () => {
     logout();
@@ -41,9 +84,31 @@ export function InternSidebar({ onLinkClick }: InternSidebarProps) {
           className="flex items-center gap-2"
           onClick={onLinkClick}
         >
-          <span className="font-bold text-2xl">TechCorp Solutions</span>
+          {/* Company Logo */}
+          {company?.logoUrl && !logoError ? (
+            <div className="relative h-8 w-8 flex-shrink-0">
+              <Image
+                src={company.logoUrl}
+                alt={`${company.name} logo`}
+                fill
+                className="object-contain rounded"
+                unoptimized
+                onError={() => setLogoError(true)}
+              />
+            </div>
+          ) : (
+            <div className="h-8 w-8 flex-shrink-0 rounded bg-primary/10 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-primary" />
+            </div>
+          )}
+
+          {/* Company Name */}
+          <span className="font-bold text-xl truncate">
+            {company?.name || "Loading..."}
+          </span>
         </Link>
       </div>
+
       <nav className="flex-1 space-y-2">
         {navLinks.map((link) => (
           <Link
