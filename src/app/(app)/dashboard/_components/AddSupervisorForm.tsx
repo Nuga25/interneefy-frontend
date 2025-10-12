@@ -34,6 +34,7 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
+  const [experience, setExperience] = useState(""); // Kept experience as requested
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,6 +45,7 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
     setEmail("");
     setPhone("");
     setDomain("");
+    setExperience(""); // Kept
     setError("");
   };
 
@@ -67,6 +69,9 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
             fullName,
             email,
             role: "SUPERVISOR",
+            domain, // Included
+            experience, // Kept
+            phone, // Optional
           }),
         }
       );
@@ -164,13 +169,29 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
                 <SelectValue placeholder="Select a domain" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="engineering">
+                <SelectItem value="Software Engineering">
                   Software Engineering
                 </SelectItem>
-                <SelectItem value="design">Product Design</SelectItem>
-                <SelectItem value="marketing">Marketing</SelectItem>
+                <SelectItem value="Product Design">Product Design</SelectItem>
+                <SelectItem value="Marketing">Marketing</SelectItem>
+                <SelectItem value="Data Science">Data Science</SelectItem>
+                <SelectItem value="UX/UI Design">UX/UI Design</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          {/* Experience Input (kept as requested) */}
+          <div className="space-y-2">
+            <Label htmlFor="experience">
+              Experience (Optional, e.g., &quot;5 years&quot;)
+            </Label>
+            <Input
+              id="experience"
+              type="text"
+              value={experience}
+              onChange={(e) => setExperience(e.target.value)}
+              placeholder="5 years"
+              disabled={isSubmitting}
+            />
           </div>
           <DialogFooter>
             <Button

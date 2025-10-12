@@ -1,143 +1,206 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  PlusCircle,
-  Users,
-  UserCheck,
-  BarChart2,
-  Briefcase,
-} from "lucide-react"; // Icons
+import { Users, UserCheck, BarChart2, Briefcase } from "lucide-react";
 import { DataTable } from "../_components/user-table/data-table";
 import {
   supervisorColumns,
   Supervisor,
 } from "../_components/user-table/supervisorsColumn";
+import { AddSupervisorForm } from "../_components/AddSupervisorForm"; // NEW: Import the form (adjust path if needed)
 
-// Mock Data matching the screenshot
-const mockSupervisors: Supervisor[] = [
-  {
-    id: 101,
-    fullName: "Mike Chen",
-    email: "mike.chen@company.com",
-    assignedDomain: "Software Engineering",
-    department: "Engineering",
-    experience: "5 years",
-    joinDate: "8/15/2023",
-    assignedInterns: {
-      count: 3,
-      list: "Alice Johnson, Frank Thompson, John Doe",
-    },
-  },
-  {
-    id: 102,
-    fullName: "Sarah Davis",
-    email: "sarah.davis@company.com",
-    assignedDomain: "Marketing",
-    department: "Marketing",
-    experience: "7 years",
-    joinDate: "9/1/2023",
-    assignedInterns: { count: 1, list: "Bob Wilson" },
-  },
-  {
-    id: 103,
-    fullName: "John Smith",
-    email: "john.smith@company.com",
-    assignedDomain: "Product Design",
-    department: "Design",
-    experience: "8 years",
-    joinDate: "7/20/2023",
-    assignedInterns: { count: 1, list: "Carol Brown" },
-  },
-  {
-    id: 104,
-    fullName: "Lisa Anderson",
-    email: "lisa.anderson@company.com",
-    assignedDomain: "Business Analysis",
-    department: "Business",
-    experience: "6 years",
-    joinDate: "10/10/2023",
-    assignedInterns: { count: 1, list: "Emma Pierce" },
-  },
-  {
-    id: 105,
-    fullName: "David Kim",
-    email: "david.kim@company.com",
-    assignedDomain: "Finance",
-    department: "Finance",
-    experience: "10 years",
-    joinDate: "1/5/2023",
-    assignedInterns: { count: 0, list: "None" },
-  },
-  {
-    id: 106,
-    fullName: "Maria Garcia",
-    email: "maria.garcia@company.com",
-    assignedDomain: "HR",
-    department: "HR",
-    experience: "4 years",
-    joinDate: "11/20/2023",
-    assignedInterns: { count: 0, list: "None" },
-  },
-];
+// Helper to decode JWT for initials
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
+};
+
+const getInitials = (fullName: string) => {
+  const names = (fullName || "").trim().split(" ");
+  const firstInitial = names[0]?.charAt(0).toUpperCase() || "";
+  const lastInitial = names[names.length - 1]?.charAt(0).toUpperCase() || "";
+  return `${firstInitial}${lastInitial}`;
+};
 
 const SupervisorsPage = () => {
   const token = useAuthStore((state) => state.token);
-  const [supervisors, setSupervisors] = useState<Supervisor[]>(mockSupervisors);
-  const [isLoading, setIsLoading] = useState(false); // State for filtering the table data
 
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]); // State for managing modals (View/Edit)
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+  const [adminFullName, setAdminFullName] = useState("Admin User");
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selectedSupervisor, setSelectedSupervisor] =
-    useState<Supervisor | null>(null); // --- STATS CALCULATION ---
+    useState<Supervisor | null>(null);
 
-  const totalSupervisors = supervisors.length; // Supervisors with at least one assigned intern
+  // Decode token for initials
+  useEffect(() => {
+    if (token) {
+      const tokenPayload = decodeJwt(token);
+      const fullName = tokenPayload?.fullName || "Admin User";
+      setAdminFullName(fullName);
+    }
+  }, [token]);
+
+  const fetchSupervisors = useCallback(async () => {
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setFetchError(null);
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Filter for supervisors only
+        const rawSupervisors = data.filter(
+          (user: any) => user.role === "SUPERVISOR"
+        );
+
+        // Map to Supervisor type (assumes backend includes supervisees)
+        const supervisorsData: Supervisor[] = rawSupervisors.map(
+          (user: any) => {
+            const supervisees = user.supervisees || [];
+            const internsList =
+              supervisees.map((i: any) => i.fullName).join(", ") || "None";
+            return {
+              id: user.id,
+              fullName: user.fullName,
+              email: user.email,
+              assignedDomain: user.domain || "General",
+              experience: user.experience || "0 years", // Backend should add 'experience'
+              joinDate: user.createdAt
+                ? new Date(user.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "N/A",
+              assignedInterns: {
+                count: supervisees.length,
+                list: internsList,
+              },
+            };
+          }
+        );
+
+        setSupervisors(supervisorsData);
+      } else {
+        const errorText = await response.text();
+        console.error(
+          `Server error fetching supervisors (Status: ${response.status}):`,
+          errorText
+        );
+        setFetchError(
+          `Failed to load supervisors: Server returned status ${response.status}.`
+        );
+        setSupervisors([]);
+      }
+    } catch (error) {
+      console.error("Network error fetching supervisors:", error);
+      setFetchError(
+        "A network error occurred. Ensure the API server is running."
+      );
+      setSupervisors([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchSupervisors();
+  }, [fetchSupervisors]);
+
+  // Accurate stats based on real data
+  const totalSupervisors = supervisors.length;
   const activeSupervisors = supervisors.filter(
     (s) => s.assignedInterns.count > 0
-  ).length; // Supervisors with zero assigned interns
+  ).length;
   const availableSupervisors = supervisors.filter(
     (s) => s.assignedInterns.count === 0
   ).length;
   const totalInternsSupervised = supervisors.reduce(
     (sum, s) => sum + s.assignedInterns.count,
     0
-  ); // --- HANDLERS FOR ACTIONS --- // These handlers will be passed to the DataTable's meta object
+  );
 
+  // Refresh after adding supervisor
+  const handleUserAdded = useCallback(() => {
+    fetchSupervisors();
+  }, [fetchSupervisors]);
+
+  // Action handlers
   const handleViewSupervisor = (supervisor: Supervisor) => {
-    setSelectedSupervisor(supervisor); // TODO: Implement a View Details Modal here
-    console.log(`Viewing Supervisor: ${supervisor.fullName}`);
+    setSelectedSupervisor(supervisor);
+    console.log(`Viewing Supervisor: ${supervisor.fullName}`); // TODO: Open modal
   };
 
   const handleEditSupervisor = (supervisor: Supervisor) => {
-    setSelectedSupervisor(supervisor); // TODO: Implement an Edit Form Modal here
-    console.log(`Editing Supervisor: ${supervisor.fullName}`);
+    setSelectedSupervisor(supervisor);
+    console.log(`Editing Supervisor: ${supervisor.fullName}`); // TODO: Open edit modal
   };
 
-  const fetchSupervisors = async () => {
-    // NOTE: Add your real API data fetching logic here
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 500);
-  };
-
-  useEffect(() => {
-    fetchSupervisors();
-  }, [token]); // General Search Filter Handler (filters on 'fullName' column ID)
-
-  const handleGeneralFilterChange = (value: string) => {
+  // Filter handler
+  const handleGeneralFilterChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setColumnFilters((prev) => {
-      const newFilters = prev.filter((f) => (f as any).id !== "fullName");
-      if (value) {
-        // Set the filter value for the 'fullName' column
-        newFilters.push({ id: "fullName", value });
+      const existing = prev.filter((f) => f.id !== "fullName");
+      if (event.target.value) {
+        return [...existing, { id: "fullName", value: event.target.value }];
       }
-      return newFilters;
+      return existing;
     });
   };
+
+  const initials = getInitials(adminFullName);
+
+  if (fetchError) {
+    return (
+      <div className="p-4">
+        <header className="flex items-center justify-between shadow-sm p-4 bg-white">
+          <div>
+            <h1 className="text-3xl font-bold">Supervisors Management</h1>
+            <p className="text-muted-foreground">
+              Manage supervisor accounts and their domain assignments
+            </p>
+          </div>
+          <div className="bg-primary/10 text-primary rounded-full h-10 w-10 flex items-center justify-center font-medium">
+            <p>{initials}</p>
+          </div>
+        </header>
+        <main className="p-4">
+          <div className="text-destructive">{fetchError}</div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -149,22 +212,20 @@ const SupervisorsPage = () => {
           </p>
         </div>
         <div className="bg-primary/10 text-primary rounded-full h-10 w-10 flex items-center justify-center font-medium">
-          <p>SJ</p>
+          <p>{initials}</p>
         </div>
       </header>
 
       <main className="p-4">
         <div className="flex items-center justify-between mb-8">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Supervisor
-          </Button>
+          <AddSupervisorForm onUserAdded={handleUserAdded} />
         </div>
-        {/* --- 1. Summary Cards --- */}
+
+        {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {" "}
                 Total Supervisors
               </CardTitle>
               <Users className="h-4 w-4 text-primary" />
@@ -209,21 +270,22 @@ const SupervisorsPage = () => {
             </CardContent>
           </Card>
         </div>
+
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>All Supervisors ({totalSupervisors})</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* --- 2. Search Bar --- */}
+            {/* Search Bar */}
             <div className="flex items-center gap-4 py-4 border-b">
               <Input
                 placeholder="Search by name, email, or domain..."
                 className="max-w-sm"
-                onChange={(e) => handleGeneralFilterChange(e.target.value)}
+                onChange={handleGeneralFilterChange}
               />
-              {/* Domain Filter can be added here later */}
             </div>
-            {/* --- 3. Data Table --- */}
+
+            {/* Data Table */}
             {isLoading ? (
               <div className="text-center p-12 text-muted-foreground">
                 Loading supervisor data...
@@ -234,7 +296,7 @@ const SupervisorsPage = () => {
                 data={supervisors}
                 columnFilters={columnFilters}
                 setColumnFilters={setColumnFilters}
-                searchColumnId="fullName" // Use fullName for the general search // FIX: Use the 'meta' prop to pass custom handlers, resolving the TS error
+                searchColumnId="fullName"
                 meta={{
                   onViewSupervisor: handleViewSupervisor,
                   onEditSupervisor: handleEditSupervisor,
