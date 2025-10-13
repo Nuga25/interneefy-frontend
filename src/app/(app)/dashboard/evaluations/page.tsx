@@ -209,7 +209,7 @@ const EvaluationsPage = () => {
       setIsDialogOpen(false);
       resetForm();
 
-      // Show success message (you can replace alert with a toast)
+      // Show success message
       setError(null);
     } catch (err) {
       console.error("Error submitting evaluation:", err);

@@ -1,5 +1,3 @@
-// app/(app)/dashboard/_components/AdminDashboard.tsx
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -12,13 +10,21 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Users,
   UserCheck,
-  PlusCircle,
   Target,
   CheckCircle2,
+  Mail,
+  User as UserIcon,
+  Briefcase,
 } from "lucide-react";
 import { BarChartComponent, PieChartComponent } from "@/components/Charts";
 import { DataTable } from "./user-table/data-table";
@@ -26,21 +32,14 @@ import { columns, User } from "./user-table/columns";
 import { AddInternForm } from "./AddInternForm";
 import { AddSupervisorForm } from "./AddSupervisorForm";
 
-// Helper function to safely decode JWT payload (since we cannot use external libraries)
-// This extracts the JSON payload from the middle segment of the JWT.
 const decodeJwt = (token: string) => {
   try {
     const base64Url = token.split(".")[1];
-    // Convert base64url to base64 format
     const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-
-    // Decode base64 and handle encoding issues
     const jsonPayload = decodeURIComponent(
       atob(base64)
         .split("")
-        .map((c) => {
-          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-        })
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
         .join("")
     );
     return JSON.parse(jsonPayload);
@@ -50,7 +49,6 @@ const decodeJwt = (token: string) => {
   }
 };
 
-//function to generate initials from name
 const getInitials = (fullName: string) => {
   const names = (fullName || "").trim().split(" ");
   const firstInitial = names[0]?.charAt(0).toUpperCase() || "";
@@ -62,10 +60,12 @@ const AdminDashboard = () => {
   const token = useAuthStore((state) => state.token);
 
   const [adminId, setAdminId] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false); // New state to control data fetching
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [adminProfile, setAdminProfile] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -78,6 +78,7 @@ const AdminDashboard = () => {
     Array<{ name: string; value: number }>
   >([]);
   const [chartsLoading, setChartsLoading] = useState(true);
+  const [tasksInProgress, setTasksInProgress] = useState<number>(0);
 
   useEffect(() => {
     if (token) {
@@ -87,7 +88,6 @@ const AdminDashboard = () => {
       if (id) {
         setAdminId(id);
       }
-      // Once we've checked the token, we are initialized (even if ID is null)
       setIsInitialized(true);
     }
   }, [token]);
@@ -95,7 +95,6 @@ const AdminDashboard = () => {
   const fetchUsers = useCallback(
     async (currentAdminId: string | null, setProfile = true) => {
       if (!token || !currentAdminId) {
-        // If we don't have a token or an ID, we can't fetch the list for profiling.
         setIsLoading(false);
         return;
       }
@@ -115,7 +114,6 @@ const AdminDashboard = () => {
           const data: User[] = await response.json();
           setUsers(data);
 
-          // Find the admin profile using the ID extracted from the token
           if (setProfile) {
             const currentAdmin = data.find(
               (user) => user.id.toString() === currentAdminId
@@ -123,14 +121,7 @@ const AdminDashboard = () => {
 
             if (currentAdmin) {
               setAdminProfile(currentAdmin);
-              console.log(
-                "Admin Profile found and set:",
-                currentAdmin.fullName
-              );
             } else {
-              console.warn(
-                `Admin user with ID ${currentAdminId} not found in the fetched user list.`
-              );
               setAdminProfile({
                 id: 0,
                 fullName: "Fallback Admin User",
@@ -146,14 +137,14 @@ const AdminDashboard = () => {
             errorText
           );
           setFetchError(
-            `Failed to load user list: Server returned status ${response.status}. Please check your backend logs.`
+            `Failed to load user list: Server returned status ${response.status}.`
           );
           setUsers([]);
         }
       } catch (error) {
         console.error("Network error fetching users:", error);
         setFetchError(
-          "A network error occurred. Ensure the API server is running at localhost:4000."
+          "A network error occurred. Ensure the API server is running."
         );
         setUsers([]);
       } finally {
@@ -163,13 +154,34 @@ const AdminDashboard = () => {
     [token]
   );
 
-  // Function to fetch chart statistics
+  const fetchTasksInProgress = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/supervision/tasks`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.ok) {
+        const tasks = await response.json();
+        const inProgressCount = tasks.filter(
+          (task: any) => task.status === "IN_PROGRESS"
+        ).length;
+        setTasksInProgress(inProgressCount);
+      }
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    }
+  }, [token]);
+
   const fetchChartStatistics = useCallback(async () => {
     if (!token) return;
 
     setChartsLoading(true);
     try {
-      // Fetch enrollment data
       const enrollmentResponse = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/statistics/enrollment`,
         {
@@ -177,7 +189,6 @@ const AdminDashboard = () => {
         }
       );
 
-      // Fetch domain distribution data
       const domainResponse = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/statistics/domains`,
         {
@@ -204,8 +215,9 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (isInitialized) {
       fetchUsers(adminId);
+      fetchTasksInProgress();
     }
-  }, [isInitialized, adminId, fetchUsers]);
+  }, [isInitialized, adminId, fetchUsers, fetchTasksInProgress]);
 
   useEffect(() => {
     if (isInitialized && token) {
@@ -215,6 +227,9 @@ const AdminDashboard = () => {
 
   const handleDeleteUser = async (userId: number) => {
     if (!token) return;
+
+    if (!confirm("Are you sure you want to delete this user?")) return;
+
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/users/${userId}`,
@@ -225,18 +240,23 @@ const AdminDashboard = () => {
       );
 
       if (response.ok) {
-        // If delete is successful, refresh the user list to update the UI
         fetchUsers(adminId, false);
+        alert("User deleted successfully!");
       } else {
         const errorData = await response.json();
         alert(`Failed to delete user: ${errorData.error}`);
       }
     } catch (error) {
       console.error("Error deleting user:", error);
+      alert("Failed to delete user. Please try again.");
     }
   };
 
-  // Calculate stats based on the fetched user data
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user);
+    setIsModalOpen(true);
+  };
+
   const totalInterns = users.filter((user) => user.role === "INTERN").length;
   const totalSupervisors = users.filter(
     (user) => user.role === "SUPERVISOR"
@@ -269,7 +289,8 @@ const AdminDashboard = () => {
             <AddSupervisorForm onUserAdded={() => fetchUsers(adminId, false)} />
           </div>
         </div>
-        {/* Top Summary Cards */}
+
+        {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -321,13 +342,15 @@ const AdminDashboard = () => {
               <CheckCircle2 className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">20</div>
+              <div className="text-2xl font-bold text-primary">
+                {tasksInProgress}
+              </div>
               <small>Across all interns</small>
             </CardContent>
           </Card>
         </div>
 
-        {/* Chart Section */}
+        {/* Charts */}
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -356,7 +379,7 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Users Overview Table (Placeholder) */}
+        {/* Users Table */}
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Users Overview</CardTitle>
@@ -371,10 +394,120 @@ const AdminDashboard = () => {
               columnFilters={columnFilters}
               setColumnFilters={setColumnFilters}
               searchColumnId="fullName"
-              meta={{ deleteUser: handleDeleteUser }}
+              meta={{
+                deleteUser: handleDeleteUser,
+                viewUser: handleViewUser,
+              }}
             />
           </CardContent>
         </Card>
+
+        {/* User Details Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>User Details</DialogTitle>
+              <DialogDescription>
+                Complete information about the user
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedUser && (
+              <div className="space-y-6 py-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-primary/10 text-primary rounded-full h-16 w-16 flex items-center justify-center font-bold text-xl">
+                    {getInitials(selectedUser.fullName)}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold mb-1">
+                      {selectedUser.fullName}
+                    </h3>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{selectedUser.email}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                          <UserIcon className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Role</p>
+                          <p className="font-semibold">{selectedUser.role}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <Briefcase className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            User ID
+                          </p>
+                          <p className="font-semibold">{selectedUser.id}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {(selectedUser as any).domain && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Additional Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Domain:</span>
+                          <span className="font-medium">
+                            {(selectedUser as any).domain}
+                          </span>
+                        </div>
+                        {(selectedUser as any).startDate && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              Start Date:
+                            </span>
+                            <span className="font-medium">
+                              {new Date(
+                                (selectedUser as any).startDate
+                              ).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                        {(selectedUser as any).endDate && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              End Date:
+                            </span>
+                            <span className="font-medium">
+                              {new Date(
+                                (selectedUser as any).endDate
+                              ).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

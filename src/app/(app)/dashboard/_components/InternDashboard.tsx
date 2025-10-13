@@ -385,7 +385,7 @@ export default function TasksPage() {
         throw new Error("Failed to update status");
       }
 
-      // Update local state - this will trigger progress recalculation
+      // Update local state to trigger progress recalculation
       setTasks((prevTasks) =>
         prevTasks.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
       );

@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 
 interface AuthState {
   token: string | null;
-  _hasHydrated: boolean; // New state to track hydration
+  _hasHydrated: boolean; // state to track hydration
   setToken: (token: string) => void;
   logout: () => void;
   setHasHydrated: (state: boolean) => void; // New action

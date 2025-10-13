@@ -18,12 +18,12 @@ export type Supervisor = {
   email: string;
   assignedDomain: string;
   department: string;
-  experience: string; // e.g., "7 years"
-  joinDate: string; // e.g., "8/15/2023"
+  experience: string;
+  joinDate: string;
   // This object/array holds data about interns for complex display
   assignedInterns: {
     count: number;
-    list: string; // e.g., "Alice Johnson, Frank Thompson..."
+    list: string;
   };
 };
 
@@ -89,7 +89,7 @@ export const supervisorColumns: ColumnDef<Supervisor>[] = [
         </div>
       );
     },
-    // We will use the count for sorting, but the accessor is the complex object
+    // Sorting function for the assigned interns column
     sortingFn: (rowA, rowB, columnId) => {
       const a = rowA.original.assignedInterns.count;
       const b = rowB.original.assignedInterns.count;

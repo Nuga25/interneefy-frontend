@@ -11,7 +11,7 @@ import {
   supervisorColumns,
   Supervisor,
 } from "../_components/user-table/supervisorsColumn";
-import { AddSupervisorForm } from "../_components/AddSupervisorForm"; // NEW: Import the form (adjust path if needed)
+import { AddSupervisorForm } from "../_components/AddSupervisorForm";
 
 // Helper to decode JWT for initials
 const decodeJwt = (token: string) => {

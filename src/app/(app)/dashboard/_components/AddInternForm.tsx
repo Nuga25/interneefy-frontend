@@ -66,7 +66,7 @@ export function AddInternForm({
     setIsSubmitting(true);
     setError("");
 
-    // NEW: Convert dates to YYYY-MM-DD strings for backend
+    // Convert dates to YYYY-MM-DD strings for backend
     const startDateStr = startDate
       ? startDate.toISOString().split("T")[0]
       : undefined;
@@ -88,10 +88,9 @@ export function AddInternForm({
             email,
             role: "INTERN",
             supervisorId: supervisor ? parseInt(supervisor) : null,
-            domain, // FIXED: Now included (full domain string)
-            startDate: startDateStr, // FIXED: Send as string
-            endDate: endDateStr, // FIXED: Send as string
-            // notes, // OPTIONAL: Add if you extend schema/backend to handle it
+            domain,
+            startDate: startDateStr,
+            endDate: endDateStr,
           }),
         }
       );
@@ -178,7 +177,6 @@ export function AddInternForm({
                 <SelectValue placeholder="Select a domain" />
               </SelectTrigger>
               <SelectContent>
-                {/* FIXED: Changed values to full domain names (matches backend/pie chart) */}
                 <SelectItem value="Software Engineering">
                   Software Engineering
                 </SelectItem>
@@ -186,7 +184,6 @@ export function AddInternForm({
                 <SelectItem value="Marketing">Marketing</SelectItem>
                 <SelectItem value="Data Science">Data Science</SelectItem>
                 <SelectItem value="UX/UI Design">UX/UI Design</SelectItem>
-                {/* Add more domains here */}
               </SelectContent>
             </Select>
           </div>

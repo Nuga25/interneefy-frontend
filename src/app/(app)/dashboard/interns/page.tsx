@@ -14,8 +14,8 @@ import {
 import { Users, CheckCircle2, Clock, CalendarCheck } from "lucide-react";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { DataTable } from "../_components/user-table/data-table";
+import { AddInternForm } from "../_components/AddInternForm";
 import { internColumns, Intern } from "../_components/user-table/internsColumn";
-import { AddInternForm } from "../_components/AddInternForm"; // NEW: Import the form component (adjust path if needed)
 
 // Helper function to safely decode JWT payload
 const decodeJwt = (token: string) => {
@@ -45,7 +45,7 @@ const getInitials = (fullName: string) => {
   return `${firstInitial}${lastInitial}`;
 };
 
-// Compute status based on dates (using provided current date: October 12, 2025)
+// Compute status based on dates (assuming current date is Oct 12, 2025 for consistency)
 const computeStatus = (
   startDate?: string | Date | null,
   endDate?: string | Date | null
@@ -63,13 +63,17 @@ const InternsPage = () => {
   const token = useAuthStore((state) => state.token);
 
   const [interns, setInterns] = useState<Intern[]>([]);
-  const [supervisors, setSupervisors] = useState<any[]>([]); // NEW: For AddInternForm
+  const [supervisors, setSupervisors] = useState<any[]>([]);
   const [adminFullName, setAdminFullName] = useState("Admin User");
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Table filtering state
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  const [selectedIntern, setSelectedIntern] = useState<Intern | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   // Decode token for admin initials
   useEffect(() => {
@@ -81,7 +85,7 @@ const InternsPage = () => {
   }, [token]);
 
   const fetchData = useCallback(async () => {
-    // NEW: Combined fetch for users + supervisors
+    // Combined fetch for users + supervisors
     if (!token) {
       setIsLoading(false);
       return;
@@ -208,15 +212,15 @@ const InternsPage = () => {
     });
   };
 
-  // Action handlers (functional: alerts for now; extend to modals/navigation/API as needed)
-  const handleViewIntern = (internId: number, fullName: string) => {
-    // TODO: Open modal or navigate to /dashboard/interns/[id]
-    alert(`Viewing details for intern: ${fullName} (ID: ${internId})`);
+  // Action handlers
+  const handleEditIntern = (intern: Intern) => {
+    setSelectedIntern(intern);
+    setIsEditModalOpen(true);
   };
 
-  const handleEditIntern = (internId: number, fullName: string) => {
-    // TODO: Open edit modal or navigate to edit form
-    alert(`Editing details for intern: ${fullName} (ID: ${internId})`);
+  const handleViewIntern = (intern: Intern) => {
+    setSelectedIntern(intern);
+    setIsViewModalOpen(true);
   };
 
   const handleMessageIntern = (email: string) => {
@@ -261,7 +265,6 @@ const InternsPage = () => {
       </header>
 
       <main className="p-4">
-        {/* UPDATED: Replaced static button with functional AddInternForm */}
         <div className="flex items-center justify-between mb-8">
           <AddInternForm
             onUserAdded={handleUserAdded}
@@ -269,7 +272,7 @@ const InternsPage = () => {
           />
         </div>
 
-        {/* Summary Cards (now accurate based on fetched data) */}
+        {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -361,7 +364,6 @@ const InternsPage = () => {
                   <SelectItem value="Product Design">Product Design</SelectItem>
                   <SelectItem value="Marketing">Marketing</SelectItem>
                   <SelectItem value="Data Science">Data Science</SelectItem>
-                  {/* Add more as domains grow */}
                 </SelectContent>
               </Select>
             </div>
@@ -375,10 +377,10 @@ const InternsPage = () => {
               <DataTable
                 columns={internColumns}
                 data={interns}
-                // Pass action handlers via meta (update DataTable to use meta.viewUser, etc., or adjust columns to accept props)
+                // Pass action handlers via meta (update DataTable to use meta.viewIntern, etc., or adjust columns to accept props)
                 meta={{
-                  viewUser: handleViewIntern,
-                  editUser: handleEditIntern,
+                  viewIntern: handleViewIntern,
+                  editIntern: handleEditIntern,
                   messageUser: handleMessageIntern,
                 }}
                 columnFilters={columnFilters}
@@ -388,6 +390,15 @@ const InternsPage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Intern Modal */}
+        {/* <EditInternModal
+          intern={selectedIntern}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSuccess={() => fetchInterns()} // Refresh data
+          supervisors={supervisors}
+        /> */}
       </main>
     </div>
   );

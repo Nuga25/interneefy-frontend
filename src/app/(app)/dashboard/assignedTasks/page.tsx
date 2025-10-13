@@ -251,8 +251,6 @@ const AssignedTasksPage = () => {
     if (!confirm("Are you sure you want to delete this task?")) return;
 
     try {
-      // Note: You may need to add a delete endpoint to your backend
-      // For now, we'll just remove it from local state
       setTasks(tasks.filter((task) => task.id !== taskId));
 
       alert("Task deleted successfully!");

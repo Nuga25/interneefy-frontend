@@ -11,8 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// --- TYPE DEFINITIONS ---
-
 export type SupervisorRef = {
   id: number;
   name: string;
@@ -33,7 +31,6 @@ export type Domain = {
 type DomainTableMeta = {
   onViewDomain: (domain: Domain) => void;
   onEditDomain: (domain: Domain) => void;
-  // onDeleteDomain: (domainId: number) => void; // Can be added later
 };
 
 // --- COLUMN DEFINITIONS ---

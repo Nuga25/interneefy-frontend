@@ -6,13 +6,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { Button } from "./ui/button";
-import {
-  LayoutDashboard,
-  CheckSquare,
-  LogOut,
-  Building2,
-  User,
-} from "lucide-react";
+import { CheckSquare, LogOut, Building2, User } from "lucide-react";
 
 type InternSidebarProps = {
   onLinkClick?: () => void; // callback for mobile menu closure

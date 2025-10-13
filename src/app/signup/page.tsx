@@ -57,37 +57,13 @@ export default function SignUpPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-40 max-w-7xl mx-auto md:p-8">
-      {/* Left Column - Image */}
-      <div className="md:w-1/2 relative min-h-[300px] md:min-h-auto">
-        <Image
-          src="/images/signup-hero.jpg" // <-- Replace with your actual image path
-          alt="Students collaborating"
-          layout="fill"
-          objectFit="cover"
-          className="hidden md:block" // Hide image on small screens
-        />
-        {/* Placeholder/simple logo for mobile view if image is hidden */}
-        <div className="flex md:hidden items-center justify-center h-full bg-primary/10 p-4">
-          <Link href="/" className="flex flex-col items-center gap-2">
-            <img
-              src="/logo.svg"
-              alt="Interneefy Logo"
-              className="h-12 w-12 text-primary"
-            />
-            <span className="font-bold text-3xl text-foreground">
-              interneefy
-            </span>
-          </Link>
-        </div>
-      </div>
-
       {/* Right Column - Form centered */}
       <div className="md:w-1/2 flex items-center justify-center p-8 md:p-12">
         <div className="mx-auto w-full max-w-md space-y-6">
           {/* Top Logo (for mobile view if image is hidden) */}
           <div className="flex md:hidden justify-center mb-6">
             <Link href="/" className="flex items-center gap-2">
-              <img
+              <Image
                 src="/logo.svg"
                 alt="Interneefy Logo"
                 className="h-8 w-8 text-primary"
@@ -105,7 +81,7 @@ export default function SignUpPage() {
             </p>
           </div>
 
-          {/* Feature Highlights (New) */}
+          {/* Feature Highlights */}
           <div className="flex justify-center gap-4 mb-6">
             <div className="flex flex-col items-center text-center text-xs text-muted-foreground">
               <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary mb-1">

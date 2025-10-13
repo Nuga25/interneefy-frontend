@@ -11,19 +11,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
-// --- 1. Define the Intern Data Structure ---
+// Intern Data Structure
 export type Intern = {
   id: number;
   fullName: string;
   email: string;
-  domain: string; // New
-  assignedSupervisor: string; // New
-  startDate: string; // New (e.g., "1/15/2024")
-  endDate: string; // New (e.g., "4/15/2024")
-  status: "Active" | "Completed" | "Upcoming"; // New
+  domain: string | null;
+  assignedSupervisor: string | null;
+  supervisorId: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  status: "Active" | "Completed" | "Upcoming";
 };
 
-// --- 2. Define the Columns Array ---
+// Define the Columns Array
 export const internColumns: ColumnDef<Intern>[] = [
   // Full Name Column
   {
@@ -48,38 +49,49 @@ export const internColumns: ColumnDef<Intern>[] = [
     header: "Email",
   },
 
-  // Domain Column (New)
+  // Domain Column
   {
     accessorKey: "domain",
     header: "Domain",
+    cell: ({ row }) => <span>{row.getValue("domain") || "Not specified"}</span>,
   },
 
-  // Assigned Supervisor Column (New)
+  // Assigned Supervisor Column
   {
     accessorKey: "assignedSupervisor",
     header: "Assigned Supervisor",
+    cell: ({ row }) => (
+      <span>{row.getValue("assignedSupervisor") || "Not assigned"}</span>
+    ),
   },
 
-  // Start Date Column (New)
+  // Start Date Column
   {
     accessorKey: "startDate",
     header: "Start Date",
+    cell: ({ row }) => {
+      const date = row.getValue("startDate") as string | null;
+      return <span>{date ? new Date(date).toLocaleDateString() : "N/A"}</span>;
+    },
   },
 
-  // End Date Column (New)
+  // End Date Column
   {
     accessorKey: "endDate",
     header: "End Date",
+    cell: ({ row }) => {
+      const date = row.getValue("endDate") as string | null;
+      return <span>{date ? new Date(date).toLocaleDateString() : "N/A"}</span>;
+    },
   },
 
-  // Status Column (New & Styled)
+  // Status Column
   {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
       const status = row.getValue("status") as Intern["status"];
-      let variant: "default" | "secondary" | "outline" | "destructive" =
-        "outline";
+      let variant: "default" | "secondary" | "outline" = "outline";
 
       if (status === "Active") variant = "default";
       else if (status === "Completed") variant = "secondary";
@@ -109,15 +121,21 @@ export const internColumns: ColumnDef<Intern>[] = [
   {
     id: "actions",
     enableHiding: false,
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const intern = row.original;
 
-      const handleViewUser = () =>
-        alert(`Viewing details for intern: ${intern.fullName}`);
-      const handleEditUser = () =>
-        alert(`Editing details for intern: ${intern.fullName}`);
-      const handleMessageUser = () =>
-        (window.location.href = `mailto:${intern.email}`);
+      // Get functions from table's meta data
+      const meta = table.options.meta as {
+        viewIntern?: (intern: Intern) => void;
+        editIntern?: (intern: Intern) => void;
+      };
+
+      const onViewIntern = meta?.viewIntern;
+      const onEditIntern = meta?.editIntern;
+
+      const handleMessageUser = () => {
+        window.location.href = `mailto:${intern.email}`;
+      };
 
       return (
         <DropdownMenu>
@@ -131,13 +149,17 @@ export const internColumns: ColumnDef<Intern>[] = [
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
 
             {/* View */}
-            <DropdownMenuItem onClick={handleViewUser}>
+            <DropdownMenuItem
+              onClick={() => onViewIntern && onViewIntern(intern)}
+            >
               <Eye className="mr-2 h-4 w-4" />
               View Details
             </DropdownMenuItem>
 
             {/* Edit */}
-            <DropdownMenuItem onClick={handleEditUser}>
+            <DropdownMenuItem
+              onClick={() => onEditIntern && onEditIntern(intern)}
+            >
               <Pencil className="mr-2 h-4 w-4" />
               Edit Intern
             </DropdownMenuItem>

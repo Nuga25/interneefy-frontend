@@ -34,7 +34,7 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
-  const [experience, setExperience] = useState(""); // Kept experience as requested
+  const [experience, setExperience] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,7 +45,7 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
     setEmail("");
     setPhone("");
     setDomain("");
-    setExperience(""); // Kept
+    setExperience("");
     setError("");
   };
 
@@ -69,9 +69,9 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
             fullName,
             email,
             role: "SUPERVISOR",
-            domain, // Included
-            experience, // Kept
-            phone, // Optional
+            domain,
+            experience,
+            phone,
           }),
         }
       );
@@ -179,7 +179,6 @@ export function AddSupervisorForm({ onUserAdded }: AddSupervisorFormProps) {
               </SelectContent>
             </Select>
           </div>
-          {/* Experience Input (kept as requested) */}
           <div className="space-y-2">
             <Label htmlFor="experience">
               Experience (Optional, e.g., &quot;5 years&quot;)

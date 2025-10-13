@@ -22,25 +22,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // Input re-imported for local filter UI
+import { Input } from "@/components/ui/input";
 
-// --- FIX 1: Defined DataTableProps to be generic over both TData and TMeta ---
-// TMeta allows passing arbitrary custom handlers (like onView/onEdit) from the parent.
 interface DataTableProps<TData, TMeta extends Record<string, any>> {
   columns: ColumnDef<TData, any>[];
   data: TData[];
-
-  // Filtering state props passed from the parent
   columnFilters: ColumnFiltersState;
   setColumnFilters: Dispatch<SetStateAction<ColumnFiltersState>>;
-  searchColumnId: string; // Made required, as we need it for the local search
-
-  // Generic meta object to pass custom handlers down to the cell components
+  searchColumnId: string;
   meta?: TMeta;
 }
 
-// --- FIX 2: Corrected Component Signature to include TMeta ---
-// Added TMeta to the generic list and provided a default value (Record<string, any>).
 export function DataTable<
   TData,
   TMeta extends Record<string, any> = Record<string, any>
@@ -50,15 +42,13 @@ export function DataTable<
   columnFilters,
   setColumnFilters,
   searchColumnId,
-  meta, // Passed directly as a prop
+  meta,
 }: DataTableProps<TData, TMeta>) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  // columnFilters state is managed externally by the parent component
 
   const table = useReactTable({
     data,
     columns,
-    // --- FIX 3: Pass the entire generic 'meta' object directly ---
     meta,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -66,6 +56,11 @@ export function DataTable<
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 6,
+      },
+    },
     state: {
       sorting,
       columnFilters,
@@ -74,12 +69,10 @@ export function DataTable<
 
   return (
     <div>
-      {/* Filtering Input - Re-added for the primary search column */}
+      {/* Search Input */}
       <div className="flex items-center gap-4 py-4">
         <Input
-          placeholder={`Filter by ${(searchColumnId ?? "Search")
-            .toLowerCase()
-            .replace("id", "")}...`}
+          placeholder={`Filter by ${searchColumnId.toLowerCase()}...`}
           value={
             (table.getColumn(searchColumnId)?.getFilterValue() as string) ?? ""
           }
@@ -88,7 +81,6 @@ export function DataTable<
           }
           className="max-w-sm"
         />
-        {/* Any specific filtering UIs (like role/domain selects) should remain in the parent component */}
       </div>
 
       {/* Table */}
@@ -144,23 +136,29 @@ export function DataTable<
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
+      <div className="flex items-center justify-between space-x-2 py-4">
+        <div className="text-sm text-muted-foreground">
+          Page {table.getState().pagination.pageIndex + 1} of{" "}
+          {table.getPageCount()} ({data.length} total users)
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
       </div>
     </div>
   );

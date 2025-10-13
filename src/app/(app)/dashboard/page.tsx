@@ -37,7 +37,7 @@ export default function DashboardPage() {
   }
 
   if (!token) {
-    return <div>Redirecting to login...</div>; // Or null, layout will handle it
+    return <div>Redirecting to login...</div>;
   }
 
   const { role } = jwtDecode<DecodedToken>(token);

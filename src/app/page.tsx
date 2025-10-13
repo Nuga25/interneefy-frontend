@@ -348,7 +348,6 @@ export default function LandingPage() {
                     asChild
                     className="pl-6 pr-4 py-3 rounded-full flex items-center gap-2"
                   >
-                    {/* Custom padding to match design */}
                     <Link href="/signup" className="flex items-center">
                       Start Your Free Account
                       <ArrowRight className="ml-2 h-5 w-5" />
@@ -364,7 +363,7 @@ export default function LandingPage() {
                   alt="Internship program management"
                   width={600}
                   height={550}
-                  className="rounded-r-3xl bg-cover bg-purple-100" // Apply rounded corners to the image
+                  className="rounded-r-3xl bg-cover bg-purple-100"
                 />
               </div>
             </div>

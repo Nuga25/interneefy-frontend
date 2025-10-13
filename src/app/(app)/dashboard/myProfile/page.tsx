@@ -324,7 +324,7 @@ export default function ProfileAndFeedbackPage() {
             const evalData = await evalResponse.json();
             setEvaluation(evalData);
           }
-          // If 404, evaluation doesn't exist yet - that's ok
+          // If 404, evaluation doesn't exist yet
         } catch (err) {
           console.log("No evaluation found yet");
         }

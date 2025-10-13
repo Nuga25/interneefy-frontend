@@ -11,17 +11,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
-// --- 1. Define the User Data Structure ---
 export type User = {
   id: number;
   fullName: string;
   email: string;
   role: "ADMIN" | "SUPERVISOR" | "INTERN";
+  domain?: string;
+  startDate?: string;
+  endDate?: string;
 };
 
-// --- 2. Define the Columns Array ---
 export const columns: ColumnDef<User>[] = [
-  // Full Name Column (Sortable)
   {
     accessorKey: "fullName",
     header: ({ column }) => {
@@ -42,13 +42,11 @@ export const columns: ColumnDef<User>[] = [
     ),
   },
 
-  // Email Column
   {
     accessorKey: "email",
     header: "Email",
   },
 
-  // Role Column (Filterable)
   {
     accessorKey: "role",
     header: "Role",
@@ -72,7 +70,6 @@ export const columns: ColumnDef<User>[] = [
     },
   },
 
-  // Company Name Column
   {
     accessorKey: "companyName",
     header: "Company",
@@ -83,26 +80,30 @@ export const columns: ColumnDef<User>[] = [
     ),
   },
 
-  // Actions Column (View, Message, Delete)
   {
     id: "actions",
     enableHiding: false,
     cell: ({ row, table }) => {
       const user = row.original;
-      // Get the delete function from the table's meta data
-      const onDeleteUser = (
-        table.options.meta as { deleteUser?: (id: number) => void }
-      )?.deleteUser;
-
-      // Mock function for viewing details (would typically open a modal or navigate)
-      const handleViewUser = () => {
-        alert(`Viewing details for user: ${user.fullName} (ID: ${user.id})`);
-        // In a real app: router.push(`/admin/users/${user.id}`)
+      const meta = table.options.meta as {
+        deleteUser?: (id: number) => void;
+        viewUser?: (user: User) => void;
       };
 
-      // Function to open the user's email client
+      const handleViewUser = () => {
+        if (meta?.viewUser) {
+          meta.viewUser(user);
+        }
+      };
+
       const handleMessageUser = () => {
         window.location.href = `mailto:${user.email}?subject=Message%20from%20Company%20Admin`;
+      };
+
+      const handleDeleteUser = () => {
+        if (meta?.deleteUser) {
+          meta.deleteUser(user.id);
+        }
       };
 
       return (
@@ -116,7 +117,6 @@ export const columns: ColumnDef<User>[] = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
 
-            {/* 1. The new View option */}
             <DropdownMenuItem onClick={handleViewUser}>
               <Eye className="mr-2 h-4 w-4" />
               View Details
@@ -124,7 +124,6 @@ export const columns: ColumnDef<User>[] = [
 
             <DropdownMenuSeparator />
 
-            {/* 2. The new Message option */}
             <DropdownMenuItem onClick={handleMessageUser}>
               <Mail className="mr-2 h-4 w-4" />
               Message User
@@ -132,9 +131,8 @@ export const columns: ColumnDef<User>[] = [
 
             <DropdownMenuSeparator />
 
-            {/* 3. The Delete option */}
             <DropdownMenuItem
-              onClick={() => onDeleteUser && onDeleteUser(user.id)}
+              onClick={handleDeleteUser}
               className="text-destructive focus:text-destructive"
             >
               <Trash2 className="mr-2 h-4 w-4" />
