@@ -56,11 +56,8 @@ export default function LoginPage() {
             <img
               src="/logo.svg"
               alt="Interneefy Logo"
-              className="h-8 w-8 text-primary"
+              className="h-40 w-40 text-primary"
             />
-            <span className="font-bold text-2xl text-foreground">
-              interneefy
-            </span>
           </Link>
           <p className="text-muted-foreground text-sm">
             Sign in to your account

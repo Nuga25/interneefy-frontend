@@ -67,6 +67,8 @@ export default function SignUpPage() {
                 src="/logo.svg"
                 alt="Interneefy Logo"
                 className="h-8 w-8 text-primary"
+                width={32}
+                height={32}
               />
               <span className="font-bold text-2xl text-foreground">
                 interneefy

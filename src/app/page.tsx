@@ -72,11 +72,11 @@ export default function LandingPage() {
             </div>
             <div className="flex-1">
               <Image
-                src="/hero-image.png"
+                src="/images/hero-image.png"
                 alt="Hero Image"
                 width={600}
-                height={400}
-                className="mt-12 mx-auto bg-purple-100 rounded-lg shadow-lg"
+                height={800}
+                className="mt-12 mx-auto bg-purple-100 bg-center rounded-md object-cover"
               />
             </div>
           </div>
@@ -359,11 +359,11 @@ export default function LandingPage() {
               {/* Right Image Area */}
               <div className="md:w-1/2 relative min-h-[300px] md:min-h-auto">
                 <Image
-                  src="/null"
+                  src="/images/internship-illustration.jpg"
                   alt="Internship program management"
                   width={600}
                   height={550}
-                  className="rounded-r-3xl bg-cover bg-purple-100"
+                  className="rounded-r-3xl bg-cover bg-purple-100 bg-center absolute inset-0 w-full h-full object-cover"
                 />
               </div>
             </div>
@@ -382,8 +382,8 @@ export default function LandingPage() {
                 <Image
                   src="/logo.svg"
                   alt="Interneefy Logo"
-                  width={32}
-                  height={32}
+                  width={40}
+                  height={40}
                 />
                 <span className="font-bold text-2xl text-white">
                   interneefy
@@ -510,7 +510,14 @@ export default function LandingPage() {
           {/* Bottom Bar: Copyright */}
           <div className="mt-12 border-t border-border/20 pt-6 text-center text-sm text-muted-foreground">
             <p>
-              &copy; {new Date().getFullYear()} Interneefy. All Rights Reserved.
+              <a
+                href="https://github.com/Nuga25"
+                target="_blank"
+                className="underline"
+              >
+                &copy; {new Date().getFullYear()} Interneefy. All Rights
+                Reserved.
+              </a>
             </p>
           </div>
         </div>
